@@ -33,8 +33,8 @@ class CashPaymentFlowTests {
     fun start() {
         mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin(), cordappPackages = listOf("net.corda.finance.contracts.asset"))
         notaryNode = mockNet.createNotaryNode()
-        bankOfCordaNode = mockNet.createPartyNode(BOC.name)
-        bankOfCorda = bankOfCordaNode.info.chooseIdentity()
+        bankOfCordaNode = mockNet.createPartyNode(BOC_NAME)
+        bankOfCorda = bankOfCordaNode.info.identityFromX500Name(BOC_NAME)
         notary = notaryNode.services.getDefaultNotary()
         val future = bankOfCordaNode.services.startFlow(CashIssueFlow(initialBalance, ref, notary)).resultFuture
         mockNet.runNetwork()
@@ -48,7 +48,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay some cash`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = notaryNode.info.identityFromX500Name(DUMMY_NOTARY.name)
         val expectedPayment = 500.DOLLARS
         val expectedChange = 1500.DOLLARS
 
@@ -88,7 +88,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay more than we have`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = notaryNode.info.identityFromX500Name(DUMMY_NOTARY.name)
         val expected = 4000.DOLLARS
         val future = bankOfCordaNode.services.startFlow(CashPaymentFlow(expected,
                 payTo)).resultFuture
@@ -100,7 +100,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay zero cash`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = notaryNode.info.identityFromX500Name(DUMMY_NOTARY.name)
         val expected = 0.DOLLARS
         val future = bankOfCordaNode.services.startFlow(CashPaymentFlow(expected,
                 payTo)).resultFuture
