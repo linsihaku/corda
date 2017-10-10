@@ -47,13 +47,15 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
     private val DUMMY_CASH_ISSUER_KEY = generateKeyPair()
     private val DUMMY_CASH_ISSUER = Party(CordaX500Name(organisation = "Cash issuer", locality = "London", country = "GB"), DUMMY_CASH_ISSUER_KEY.public)
     private val services = MockServices(listOf("net.corda.finance.contracts.asset"), DUMMY_CASH_ISSUER_KEY, MEGA_CORP_KEY)
+    // This is safe because MockServices only ever have a single identity
+    private val identity = services.myInfo.legalIdentitiesAndCerts.single().party
 
     private lateinit var oracle: NodeInterestRates.Oracle
     private lateinit var database: CordaPersistence
 
     private fun fixCmdFilter(elem: Any): Boolean {
         return when (elem) {
-            is Command<*> -> services.myInfo.chooseIdentity().owningKey in elem.signers && elem.value is Fix
+            is Command<*> -> identity.owningKey in elem.signers && elem.value is Fix
             else -> false
         }
     }
@@ -148,7 +150,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
         database.transaction {
             val tx = makePartialTX()
             val fix = oracle.query(listOf(NodeInterestRates.parseFixOf("LIBOR 2016-03-16 1M"))).first()
-            tx.addCommand(fix, services.myInfo.chooseIdentity().owningKey)
+            tx.addCommand(fix, identity.owningKey)
             // Sign successfully.
             val wtx = tx.toWireTransaction(services)
             val ftx = wtx.buildFilteredTransaction(Predicate { fixCmdFilter(it) })
@@ -163,7 +165,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
             val tx = makePartialTX()
             val fixOf = NodeInterestRates.parseFixOf("LIBOR 2016-03-16 1M")
             val badFix = Fix(fixOf, BigDecimal("0.6789"))
-            tx.addCommand(badFix, services.myInfo.chooseIdentity().owningKey)
+            tx.addCommand(badFix, identity.owningKey)
             val wtx = tx.toWireTransaction(services)
             val ftx = wtx.buildFilteredTransaction(Predicate { fixCmdFilter(it) })
             val e1 = assertFailsWith<NodeInterestRates.UnknownFix> { oracle.sign(ftx) }
@@ -178,12 +180,12 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
             val fix = oracle.query(listOf(NodeInterestRates.parseFixOf("LIBOR 2016-03-16 1M"))).first()
             fun filtering(elem: Any): Boolean {
                 return when (elem) {
-                    is Command<*> -> services.myInfo.chooseIdentity().owningKey in elem.signers && elem.value is Fix
+                    is Command<*> -> identity.owningKey in elem.signers && elem.value is Fix
                     is TransactionState<ContractState> -> true
                     else -> false
                 }
             }
-            tx.addCommand(fix, services.myInfo.chooseIdentity().owningKey)
+            tx.addCommand(fix, identity.owningKey)
             val wtx = tx.toWireTransaction(services)
             val ftx = wtx.buildFilteredTransaction(Predicate(::filtering))
             assertFailsWith<IllegalArgumentException> { oracle.sign(ftx) }
