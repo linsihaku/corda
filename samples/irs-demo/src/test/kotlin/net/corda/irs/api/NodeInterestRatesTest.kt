@@ -204,16 +204,17 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
     fun `network tearoff`() {
         val mockNet = MockNetwork(initialiseSerialization = false, cordappPackages = listOf("net.corda.finance.contracts"))
         val n1 = mockNet.createNotaryNode()
-        val oracleNode = mockNet.createNode().apply {
+        val oracleNode = mockNet.createNode(legalName = ALICE_NAME).apply {
             internals.registerInitiatedFlow(NodeInterestRates.FixQueryHandler::class.java)
             internals.registerInitiatedFlow(NodeInterestRates.FixSignHandler::class.java)
             database.transaction {
                 internals.installCordaService(NodeInterestRates.Oracle::class.java).knownFixes = TEST_DATA
             }
         }
+        val oracle = oracleNode.services.myInfo.chooseIdentity(ALICE_NAME)
         val tx = makePartialTX()
         val fixOf = NodeInterestRates.parseFixOf("LIBOR 2016-03-16 1M")
-        val flow = FilteredRatesFlow(tx, oracleNode.info.chooseIdentity(), fixOf, BigDecimal("0.675"), BigDecimal("0.1"))
+        val flow = FilteredRatesFlow(tx, oracle, fixOf, BigDecimal("0.675"), BigDecimal("0.1"))
         LogHelper.setLevel("rates")
         mockNet.runNetwork()
         val future = n1.services.startFlow(flow).resultFuture
