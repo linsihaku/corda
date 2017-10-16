@@ -9,6 +9,7 @@ import net.corda.core.crypto.generateKeyPair
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
+import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.packageName
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.QueryCriteria
@@ -51,7 +52,7 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
     }
 
     private lateinit var services: MockServices
-    private lateinit var identity: Party
+    private lateinit var identity: PartyAndCertificate
     private lateinit var issuerServices: MockServices
     private val vaultService get() = services.vaultService as NodeVaultService
     private lateinit var database: CordaPersistence
@@ -64,7 +65,7 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
         database = databaseAndServices.first
         services = databaseAndServices.second
         // This is safe because MockServices only ever have a single identity
-        identity = services.myInfo.chooseIdentity()
+        identity = services.myInfo.chooseIdentityAndCert()
         issuerServices = MockServices(cordappPackages, DUMMY_CASH_ISSUER_KEY, BOC_KEY)
     }
 
@@ -480,11 +481,11 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
     fun `is ownable state relevant`() {
         val service = vaultService
         val amount = Amount(1000, Issued(BOC.ref(1), GBP))
-        val wellKnownCash = Cash.State(amount, identity)
+        val wellKnownCash = Cash.State(amount, identity.party)
         val myKeys = services.keyManagementService.filterMyKeys(listOf(wellKnownCash.owner.owningKey))
         assertTrue { service.isRelevant(wellKnownCash, myKeys.toSet()) }
 
-        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(services.myInfo.chooseIdentityAndCert(), false)
+        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(identity, false)
         val anonymousCash = Cash.State(amount, anonymousIdentity.party)
         val anonymousKeys = services.keyManagementService.filterMyKeys(listOf(anonymousCash.owner.owningKey))
         assertTrue { service.isRelevant(anonymousCash, anonymousKeys.toSet()) }
@@ -500,18 +501,19 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
     @Test
     fun `correct updates are generated for general transactions`() {
         val service = vaultService
+        val notary = identity.party
         val vaultSubscriber = TestSubscriber<Vault.Update<*>>().apply {
             service.updates.subscribe(this)
         }
 
-        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(services.myInfo.chooseIdentityAndCert(), false)
+        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(identity, false)
         val thirdPartyIdentity = AnonymousParty(generateKeyPair().public)
         val amount = Amount(1000, Issued(BOC.ref(1), GBP))
 
         // Issue then move some cash
-        val issueTx = TransactionBuilder(identity).apply {
+        val issueTx = TransactionBuilder(notary).apply {
             Cash().generateIssue(this,
-                    amount, anonymousIdentity.party, identity)
+                    amount, anonymousIdentity.party, notary)
         }.toWireTransaction(services)
         val cashState = StateAndRef(issueTx.outputs.single(), StateRef(issueTx.id, 0))
 
@@ -519,7 +521,7 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
         val expectedIssueUpdate = Vault.Update(emptySet(), setOf(cashState), null)
 
         database.transaction {
-            val moveTx = TransactionBuilder(identity).apply {
+            val moveTx = TransactionBuilder(notary).apply {
                 Cash.generateSpend(services, this, Amount(1000, GBP), thirdPartyIdentity)
             }.toWireTransaction(services)
             service.notify(moveTx)
@@ -533,13 +535,13 @@ class NodeVaultServiceTest : TestDependencyInjectionBase() {
     @Test
     fun `correct updates are generated when changing notaries`() {
         val service = vaultService
-        val notary = identity
+        val notary = identity.party
 
         val vaultSubscriber = TestSubscriber<Vault.Update<*>>().apply {
             service.updates.subscribe(this)
         }
 
-        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(services.myInfo.chooseIdentityAndCert(), false)
+        val anonymousIdentity = services.keyManagementService.freshKeyAndCert(identity, false)
         val thirdPartyIdentity = AnonymousParty(generateKeyPair().public)
         val amount = Amount(1000, Issued(BOC.ref(1), GBP))
 

@@ -56,7 +56,7 @@ class VaultWithCashTest : TestDependencyInjectionBase() {
         services = databaseAndServices.second
         issuerServices = MockServices(cordappPackages, DUMMY_CASH_ISSUER_KEY, MEGA_CORP_KEY)
         notaryServices = MockServices(cordappPackages, DUMMY_NOTARY_KEY)
-        notary = notaryServices.getDefaultNotary()
+        notary = notaryServices.myInfo.singleIdentityAndCert().party
     }
 
     @After

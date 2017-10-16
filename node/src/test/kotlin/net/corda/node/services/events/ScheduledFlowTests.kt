@@ -103,8 +103,8 @@ class ScheduledFlowTests {
         mockNet.startNodes()
         aliceNode = unstartedAlice.started!!
         bobNode = unstartedBob.started!!
-        alice = aliceNode.services.myInfo.chooseIdentity(ALICE_NAME)
-        bob = bobNode.services.myInfo.chooseIdentity(BOB_NAME)
+        alice = aliceNode.info.singleIdentity()
+        bob = bobNode.info.singleIdentity()
     }
 
     @After

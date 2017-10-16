@@ -48,7 +48,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
     private val DUMMY_CASH_ISSUER = Party(CordaX500Name(organisation = "Cash issuer", locality = "London", country = "GB"), DUMMY_CASH_ISSUER_KEY.public)
     private val services = MockServices(listOf("net.corda.finance.contracts.asset"), DUMMY_CASH_ISSUER_KEY, MEGA_CORP_KEY)
     // This is safe because MockServices only ever have a single identity
-    private val identity = services.myInfo.legalIdentitiesAndCerts.single().party
+    private val identity = services.myInfo.singleIdentity()
 
     private lateinit var oracle: NodeInterestRates.Oracle
     private lateinit var database: CordaPersistence
@@ -211,7 +211,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
                 internals.installCordaService(NodeInterestRates.Oracle::class.java).knownFixes = TEST_DATA
             }
         }
-        val oracle = oracleNode.services.myInfo.chooseIdentity(ALICE_NAME)
+        val oracle = oracleNode.services.myInfo.singleIdentity()
         val tx = makePartialTX()
         val fixOf = NodeInterestRates.parseFixOf("LIBOR 2016-03-16 1M")
         val flow = FilteredRatesFlow(tx, oracle, fixOf, BigDecimal("0.675"), BigDecimal("0.1"))
