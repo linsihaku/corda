@@ -46,8 +46,8 @@ class ContractUpgradeFlowTest {
         val notaryNode = mockNet.createNotaryNode()
         aliceNode = mockNet.createPartyNode(ALICE_NAME)
         bobNode = mockNet.createPartyNode(BOB_NAME)
-        alice = aliceNode.services.myInfo.chooseIdentity(ALICE_NAME)
-        bob = bobNode.services.myInfo.chooseIdentity(BOB_NAME)
+        alice = aliceNode.info.singleIdentity()
+        bob = bobNode.info.singleIdentity()
 
         // Process registration
         mockNet.runNetwork()

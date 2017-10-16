@@ -23,6 +23,7 @@ import net.corda.testing.ALICE_NAME
 import net.corda.testing.BOB_NAME
 import net.corda.testing.chooseIdentity
 import net.corda.testing.node.MockNetwork
+import net.corda.testing.singleIdentity
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -79,7 +80,7 @@ class AttachmentSerializationTest {
         client.internals.disableDBCloseOnStop() // Otherwise the in-memory database may disappear (taking the checkpoint with it) while we reboot the client.
         mockNet.runNetwork()
         server.internals.ensureRegistered()
-        serverIdentity = server.services.myInfo.chooseIdentity(ALICE_NAME)
+        serverIdentity = server.info.singleIdentity()
     }
 
     @After
