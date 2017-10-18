@@ -2037,15 +2037,17 @@ class VaultQueryTests : TestDependencyInjectionBase() {
 
         updates.expectEvents {
             sequence(
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 5) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 1) {}
+                        require(observed.isEmpty()) {}
                     }
             )
         }
@@ -2083,15 +2085,17 @@ class VaultQueryTests : TestDependencyInjectionBase() {
 
         updates.expectEvents {
             sequence(
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.size == 1) {}
                         require(produced.isEmpty()) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.size == 5) {}
                         require(produced.isEmpty()) {}
+                        require(observed.isEmpty()) {}
                     }
             )
         }
@@ -2128,25 +2132,29 @@ class VaultQueryTests : TestDependencyInjectionBase() {
 
         updates.expectEvents {
             sequence(
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 5) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 1) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.size == 1) {}
                         require(produced.size == 1) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.size == 5) {}
                         require(produced.isEmpty()) {}
+                        require(observed.isEmpty()) {}
                     }
             )
         }
@@ -2182,20 +2190,23 @@ class VaultQueryTests : TestDependencyInjectionBase() {
 
         updates.expectEvents {
             sequence(
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 10) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 3) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 1) {}
+                        require(observed.isEmpty()) {}
                     }
             )
         }
@@ -2231,15 +2242,17 @@ class VaultQueryTests : TestDependencyInjectionBase() {
 
         updates.expectEvents {
             sequence(
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 3) {}
+                        require(observed.isEmpty()) {}
                     },
-                    expect { (consumed, produced, flowId) ->
+                    expect { (consumed, produced, observed, flowId) ->
                         require(flowId == null) {}
                         require(consumed.isEmpty()) {}
                         require(produced.size == 1) {}
+                        require(observed.isEmpty()) {}
                     }
             )
         }
