@@ -7,6 +7,7 @@ import net.corda.confidential.SwapIdentitiesFlow
 import net.corda.confidential.SwapIdentitiesHandler
 import net.corda.core.CordaException
 import net.corda.core.concurrent.CordaFuture
+import net.corda.core.crypto.SignedData
 import net.corda.core.flows.*
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
@@ -21,6 +22,7 @@ import net.corda.core.node.services.*
 import net.corda.core.serialization.SerializationWhitelist
 import net.corda.core.serialization.SerializeAsToken
 import net.corda.core.serialization.SingletonSerializeAsToken
+import net.corda.core.serialization.deserialize
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.debug
@@ -65,6 +67,7 @@ import org.slf4j.Logger
 import rx.Observable
 import java.io.IOException
 import java.lang.reflect.InvocationTargetException
+import java.nio.file.Files
 import java.security.KeyPair
 import java.security.KeyStoreException
 import java.security.PublicKey
@@ -477,19 +480,18 @@ abstract class AbstractNode(config: NodeConfiguration,
         val cordappProvider = CordappProviderImpl(cordappLoader, attachments)
         _services = ServiceHubInternalImpl(schemaService, transactionStorage, stateLoader, MonitoringService(metrics), cordappProvider)
         legalIdentity = obtainIdentity(notaryConfig = null)
-        // TODO  We keep only notary identity as additional legalIdentity if we run it on a node . Multiple identities need more design thinking.
-        myNotaryIdentity = getNotaryIdentity()
-        allIdentities = listOf(legalIdentity, myNotaryIdentity).filterNotNull()
+        // TODO  We keep only distributed notary identity as additional legalIdentity if we run it on a node . Multiple identities need more design thinking.
+        myNotaryIdentity = getNotaryIdentity(legalIdentity) // In case of single notary service myNotaryIdentity will be node's single identity.
+        allIdentities = setOf(legalIdentity, myNotaryIdentity).filterNotNull()
         network = makeMessagingService(legalIdentity)
         val addresses = myAddresses() // TODO There is no support for multiple IP addresses yet.
         info = NodeInfo(addresses, allIdentities, versionInfo.platformVersion, platformClock.instant().toEpochMilli())
-        val networkMapCache = services.networkMapCache
         val tokenizableServices = mutableListOf(attachments, network, services.vaultService,
                 services.keyManagementService, services.identityService, platformClock,
-                services.auditService, services.monitoringService, networkMapCache, services.schemaService,
+                services.auditService, services.monitoringService, services.networkMapCache, services.schemaService,
                 services.transactionVerifierService, services.validatedTransactions, services.contractUpgradeService,
                 services, cordappProvider, this)
-        makeNetworkServices(network, networkMapCache, tokenizableServices)
+        makeNetworkServices(services.networkMapCache, tokenizableServices)
         return tokenizableServices
     }
 
@@ -505,7 +507,10 @@ abstract class AbstractNode(config: NodeConfiguration,
      * Obtain the node's notary identity if it's configured to be one. If part of a distributed notary then this will be
      * the distributed identity shared across all the nodes of the cluster.
      */
-    protected fun getNotaryIdentity(): PartyAndCertificate? = configuration.notary?.let { obtainIdentity(it) }
+    protected fun getNotaryIdentity(legalIdentity: PartyAndCertificate): PartyAndCertificate? = configuration.notary?.let {
+        if (it.bftSMaRt == null && it.raft == null) legalIdentity
+        else obtainIdentity(it)
+    }
 
     @VisibleForTesting
     protected open fun acceptableLiveFiberCountOnStop(): Int = 0
@@ -558,7 +563,7 @@ abstract class AbstractNode(config: NodeConfiguration,
                     NullNetworkMapService
     }
 
-    private fun makeNetworkServices(network: MessagingService, networkMapCache: NetworkMapCacheInternal, tokenizableServices: MutableList<Any>) {
+    private fun makeNetworkServices(networkMapCache: NetworkMapCacheInternal, tokenizableServices: MutableList<Any>) {
         setupInNodeNetworkMapService(networkMapCache)
         configuration.notary?.let {
             val notaryService = makeCoreNotaryService(it)
@@ -631,6 +636,33 @@ abstract class AbstractNode(config: NodeConfiguration,
         return PersistentKeyManagementService(identityService, partyKeys)
     }
 
+    abstract protected fun readNetworkParameters(): NetworkParameters
+
+    protected open fun readNetworkParametersIfPresent(): NetworkParameters? {
+        val paramsDirectory = configuration.baseDirectory / "network_parameters"
+        return if (paramsDirectory.exists()) {
+            var latestEpoch = 0
+            var latestParams: NetworkParameters? = null
+            for (paramFile in Files.list(paramsDirectory)) {
+                // We assume that we default to the highest epoch.
+                val contents = paramFile.readAll().deserialize<SignedData<NetworkParameters>>().verified()
+                val epoch = contents.epoch
+                if (latestEpoch < epoch) {
+                    latestEpoch = epoch
+                    latestParams = contents
+                }
+            }
+            log.info("Loaded the latest known version of network parameters $latestParams")
+            latestParams?.let { check(configuration.minimumPlatformVersion <= it.minimumPlatformVersion) {
+                "Node's minimumPlatformVersion is lower than network platform version"
+            } }
+            latestParams
+        } else {
+            log.info("Starting node without network parameters will accept ones form network map")
+            null
+        }
+    }
+
     abstract protected fun makeNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal): NetworkMapService
 
     private fun makeCoreNotaryService(notaryConfig: NotaryConfig): NotaryService {
@@ -696,22 +728,16 @@ abstract class AbstractNode(config: NodeConfiguration,
     private fun obtainIdentity(notaryConfig: NotaryConfig?): PartyAndCertificate {
         val keyStore = KeyStoreWrapper(configuration.nodeKeystore, configuration.keyStorePassword)
 
-        val (id, singleName) = if (notaryConfig == null) {
-            // Node's main identity
+        val (id, singleName) = if (notaryConfig == null || (notaryConfig.bftSMaRt == null && notaryConfig.raft == null)) {
+            // Node's main identity or if it's single notary - notary identity.
             Pair("identity", myLegalName)
         } else {
             val notaryId = notaryConfig.run {
                 NotaryService.constructId(validating, raft != null, bftSMaRt != null, custom)
             }
-            if (notaryConfig.bftSMaRt == null && notaryConfig.raft == null) {
-                // Node's notary identity
-                Pair(notaryId, myLegalName.copy(commonName = notaryId))
-            } else {
-                // The node is part of a distributed notary whose identity must already be generated beforehand
-                Pair(notaryId, null)
-            }
+            // The node is part of a distributed notary whose identity must already be generated beforehand.
+            Pair(notaryId, null)
         }
-
         // TODO: Integrate with Key management service?
         val privateKeyAlias = "$id-private-key"
 
@@ -769,7 +795,7 @@ abstract class AbstractNode(config: NodeConfiguration,
         override val stateMachineRecordedTransactionMapping = DBTransactionMappingStorage()
         override val auditService = DummyAuditService()
         override val transactionVerifierService by lazy { makeTransactionVerifierService() }
-        override val networkMapCache by lazy { NetworkMapCacheImpl(PersistentNetworkMapCache(this@AbstractNode.database, this@AbstractNode.configuration), identityService) }
+        override val networkMapCache by lazy { NetworkMapCacheImpl(PersistentNetworkMapCache(this@AbstractNode.database, this@AbstractNode.configuration, readNetworkParametersIfPresent()), identityService) }
         override val vaultService by lazy { makeVaultService(keyManagementService, stateLoader) }
         override val contractUpgradeService by lazy { ContractUpgradeServiceImpl() }
 

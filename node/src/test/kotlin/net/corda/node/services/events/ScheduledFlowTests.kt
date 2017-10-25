@@ -22,6 +22,7 @@ import net.corda.testing.contracts.DummyContract
 import net.corda.testing.dummyCommand
 import net.corda.testing.getDefaultNotary
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -36,7 +37,6 @@ class ScheduledFlowTests {
     }
 
     lateinit var mockNet: MockNetwork
-    lateinit var notaryNode: StartedNode<MockNetwork.MockNode>
     lateinit var nodeA: StartedNode<MockNetwork.MockNode>
     lateinit var nodeB: StartedNode<MockNetwork.MockNode>
 
@@ -94,8 +94,9 @@ class ScheduledFlowTests {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.testing.contracts"))
-        notaryNode = mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        mockNet = MockNetwork(threadPerNode = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, false)),
+                cordappPackages = listOf("net.corda.testing.contracts")
+        )
         val a = mockNet.createUnstartedNode()
         val b = mockNet.createUnstartedNode()
 

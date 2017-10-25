@@ -16,6 +16,7 @@ import net.corda.node.internal.StartedNode
 import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.junit.After
 import org.junit.Before
@@ -28,7 +29,6 @@ import kotlin.test.assertTrue
 class NotaryChangeTests {
     lateinit var mockNet: MockNetwork
     lateinit var oldNotaryNode: StartedNode<MockNetwork.MockNode>
-    lateinit var newNotaryNode: StartedNode<MockNetwork.MockNode>
     lateinit var clientNodeA: StartedNode<MockNetwork.MockNode>
     lateinit var clientNodeB: StartedNode<MockNetwork.MockNode>
     lateinit var newNotaryParty: Party
@@ -36,14 +36,17 @@ class NotaryChangeTests {
 
     @Before
     fun setUp() {
-        mockNet = MockNetwork(cordappPackages = listOf("net.corda.testing.contracts"))
-        oldNotaryNode = mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        val oldNotaryName = DUMMY_REGULATOR.name
+        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true),
+                NotaryNode.Single(oldNotaryName, true)),
+                cordappPackages = listOf("net.corda.testing.contracts")
+        )
         clientNodeA = mockNet.createNode()
         clientNodeB = mockNet.createNode()
-        newNotaryNode = mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name.copy(organisation = "Dummy Notary 2"))
+        oldNotaryNode = mockNet.notaryNodes[1]
         mockNet.runNetwork() // Clear network map registration messages
-        oldNotaryParty = newNotaryNode.services.networkMapCache.getNotary(DUMMY_NOTARY_SERVICE_NAME)!!
-        newNotaryParty = newNotaryNode.services.networkMapCache.getNotary(DUMMY_NOTARY_SERVICE_NAME.copy(organisation = "Dummy Notary 2"))!!
+        newNotaryParty = clientNodeA.services.networkMapCache.getNotary(DUMMY_NOTARY.name)!!
+        oldNotaryParty = clientNodeA.services.networkMapCache.getNotary(oldNotaryName)!!
     }
 
     @After

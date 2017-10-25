@@ -14,6 +14,7 @@ import net.corda.testing.*
 import net.corda.testing.node.InMemoryMessagingNetwork.ServicePeerAllocationStrategy.RoundRobin
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNetwork.MockNode
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -26,18 +27,21 @@ class CashPaymentFlowTests {
     private val ref = OpaqueBytes.of(0x01)
     private lateinit var bankOfCordaNode: StartedNode<MockNode>
     private lateinit var bankOfCorda: Party
-    private lateinit var notaryNode: StartedNode<MockNode>
+    private lateinit var aliceNode: StartedNode<MockNode>
     private lateinit var notary: Party
 
     @Before
     fun start() {
-        mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin(), cordappPackages = listOf("net.corda.finance.contracts.asset"))
-        notaryNode = mockNet.createNotaryNode()
+        mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin(),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.finance.contracts.asset")
+                )
         bankOfCordaNode = mockNet.createPartyNode(BOC.name)
+        aliceNode = mockNet.createPartyNode(ALICE.name)
         bankOfCorda = bankOfCordaNode.info.chooseIdentity()
-        notary = notaryNode.services.getDefaultNotary()
-        val future = bankOfCordaNode.services.startFlow(CashIssueFlow(initialBalance, ref, notary)).resultFuture
         mockNet.runNetwork()
+        notary = bankOfCordaNode.services.getDefaultNotary()
+        val future = bankOfCordaNode.services.startFlow(CashIssueFlow(initialBalance, ref, notary)).resultFuture
         future.getOrThrow()
     }
 
@@ -48,7 +52,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay some cash`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = aliceNode.info.chooseIdentity()
         val expectedPayment = 500.DOLLARS
         val expectedChange = 1500.DOLLARS
 
@@ -56,7 +60,7 @@ class CashPaymentFlowTests {
             // Register for vault updates
             val criteria = QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.ALL)
             val (_, vaultUpdatesBoc) = bankOfCordaNode.services.vaultService.trackBy<Cash.State>(criteria)
-            val (_, vaultUpdatesBankClient) = notaryNode.services.vaultService.trackBy<Cash.State>(criteria)
+            val (_, vaultUpdatesBankClient) = aliceNode.services.vaultService.trackBy<Cash.State>(criteria)
 
             val future = bankOfCordaNode.services.startFlow(CashPaymentFlow(expectedPayment,
                     payTo)).resultFuture
@@ -88,7 +92,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay more than we have`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = aliceNode.info.chooseIdentity()
         val expected = 4000.DOLLARS
         val future = bankOfCordaNode.services.startFlow(CashPaymentFlow(expected,
                 payTo)).resultFuture
@@ -100,7 +104,7 @@ class CashPaymentFlowTests {
 
     @Test
     fun `pay zero cash`() {
-        val payTo = notaryNode.info.chooseIdentity()
+        val payTo = aliceNode.info.chooseIdentity()
         val expected = 0.DOLLARS
         val future = bankOfCordaNode.services.startFlow(CashPaymentFlow(expected,
                 payTo)).resultFuture

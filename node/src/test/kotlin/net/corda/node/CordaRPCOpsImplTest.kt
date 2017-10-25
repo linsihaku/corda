@@ -29,12 +29,10 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.node.services.messaging.CURRENT_RPC_CONTEXT
 import net.corda.node.services.messaging.RpcContext
 import net.corda.nodeapi.User
-import net.corda.testing.chooseIdentity
-import net.corda.testing.expect
-import net.corda.testing.expectEvents
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNetwork.MockNode
-import net.corda.testing.sequence
+import net.corda.node.utilities.NotaryNode
+import net.corda.testing.*
 import org.apache.commons.io.IOUtils
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.junit.After
@@ -56,7 +54,6 @@ class CordaRPCOpsImplTest {
 
     lateinit var mockNet: MockNetwork
     lateinit var aliceNode: StartedNode<MockNode>
-    lateinit var notaryNode: StartedNode<MockNode>
     lateinit var notary: Party
     lateinit var rpc: CordaRPCOps
     lateinit var stateMachineUpdates: Observable<StateMachineUpdate>
@@ -65,9 +62,10 @@ class CordaRPCOpsImplTest {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(cordappPackages = listOf("net.corda.finance.contracts.asset"))
+        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, false)),
+                cordappPackages = listOf("net.corda.finance.contracts.asset")
+        )
         aliceNode = mockNet.createNode()
-        notaryNode = mockNet.createNotaryNode(validating = false)
         rpc = CordaRPCOpsImpl(aliceNode.services, aliceNode.smm, aliceNode.database, aliceNode.services)
         CURRENT_RPC_CONTEXT.set(RpcContext(User("user", "pwd", permissions = setOf(
                 startFlowPermission<CashIssueFlow>(),

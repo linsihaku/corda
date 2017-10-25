@@ -14,6 +14,7 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -22,7 +23,8 @@ class IntegrationTestingTutorial {
     fun `alice bob cash exchange example`() {
         // START 1
         driver(startNodesInProcess = true,
-                extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset")) {
+                extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset"),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = true))) {
             val aliceUser = User("aliceUser", "testPassword1", permissions = setOf(
                     startFlowPermission<CashIssueFlow>(),
                     startFlowPermission<CashPaymentFlow>()

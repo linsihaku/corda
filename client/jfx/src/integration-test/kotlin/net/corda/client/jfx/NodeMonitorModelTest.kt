@@ -31,6 +31,7 @@ import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.driver
 import net.corda.testing.node.DriverBasedTest
+import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 import rx.Observable
 
@@ -50,14 +51,15 @@ class NodeMonitorModelTest : DriverBasedTest() {
     lateinit var networkMapUpdates: Observable<NetworkMapCache.MapChange>
     lateinit var newNode: (CordaX500Name) -> NodeInfo
 
-    override fun setup() = driver(extraCordappPackagesToScan = listOf("net.corda.finance")) {
+    override fun setup() = driver(extraCordappPackagesToScan = listOf("net.corda.finance"),
+            notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
         val cashUser = User("user1", "test", permissions = setOf(
                 startFlowPermission<CashIssueFlow>(),
                 startFlowPermission<CashPaymentFlow>(),
                 startFlowPermission<CashExitFlow>())
         )
         val aliceNodeFuture = startNode(providedName = ALICE.name, rpcUsers = listOf(cashUser))
-        val notaryHandle = startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
+        startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
         val aliceNodeHandle = aliceNodeFuture.getOrThrow()
         aliceNode = aliceNodeHandle.nodeInfo
         newNode = { nodeName -> startNode(providedName = nodeName).getOrThrow().nodeInfo }
@@ -71,7 +73,7 @@ class NodeMonitorModelTest : DriverBasedTest() {
 
         monitor.register(aliceNodeHandle.configuration.rpcAddress!!, cashUser.username, cashUser.password)
         rpc = monitor.proxyObservable.value!!
-        notaryParty = notaryHandle.nodeInfo.legalIdentities[1]
+        notaryParty = rpc.notaryPartyFromX500Name(DUMMY_NOTARY.name)!!
 
         val bobNodeHandle = startNode(providedName = BOB.name, rpcUsers = listOf(cashUser)).getOrThrow()
         bobNode = bobNodeHandle.nodeInfo

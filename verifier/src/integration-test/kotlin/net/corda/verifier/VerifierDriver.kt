@@ -11,6 +11,7 @@ import net.corda.core.transactions.LedgerTransaction
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.config.configureDevKeyAndTrustStores
+import net.corda.node.utilities.NotaryNode
 import net.corda.nodeapi.ArtemisMessagingComponent.Companion.NODE_USER
 import net.corda.nodeapi.ArtemisTcpTransport
 import net.corda.nodeapi.ConnectionDirection
@@ -76,6 +77,7 @@ fun <A> verifierDriver(
         useTestClock: Boolean = false,
         startNodesInProcess: Boolean = false,
         extraCordappPackagesToScan: List<String> = emptyList(),
+        notaries: List<NotaryNode> = emptyList(),
         dsl: VerifierExposedDSLInterface.() -> A
 ) = genericDriver(
         driverDsl = VerifierDriverDSL(
@@ -87,7 +89,8 @@ fun <A> verifierDriver(
                         useTestClock = useTestClock,
                         isDebug = isDebug,
                         startNodesInProcess = startNodesInProcess,
-                        extraCordappPackagesToScan = extraCordappPackagesToScan
+                        extraCordappPackagesToScan = extraCordappPackagesToScan,
+                        notaries = notaries
                 )
         ),
         coerce = { it },

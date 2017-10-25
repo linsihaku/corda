@@ -18,6 +18,7 @@ import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.chooseIdentity
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import net.corda.testing.performance.div
 import net.corda.testing.performance.startPublishingFixedRateInjector
 import net.corda.testing.performance.startReporter
@@ -102,7 +103,7 @@ class NodePerformanceTests {
 
     @Test
     fun `self pay rate`() {
-        driver(startNodesInProcess = true, extraCordappPackagesToScan = listOf("net.corda.finance")) {
+        driver(startNodesInProcess = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = true)), extraCordappPackagesToScan = listOf("net.corda.finance")) {
             val a = startNotaryNode(
                     DUMMY_NOTARY.name,
                     rpcUsers = listOf(User("A", "A", setOf(startFlowPermission<CashIssueFlow>(), startFlowPermission<CashPaymentFlow>())))

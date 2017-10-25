@@ -6,6 +6,7 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.testing.*
 import net.corda.testing.driver.driver
 import net.corda.testing.http.HttpApi
+import net.corda.node.utilities.NotaryNode
 import net.corda.vega.api.PortfolioApi
 import net.corda.vega.api.PortfolioApiUtils
 import net.corda.vega.api.SwapDataModel
@@ -26,7 +27,8 @@ class SimmValuationTest : IntegrationTestCategory {
 
     @Test
     fun `runs SIMM valuation demo`() {
-        driver(isDebug = true, extraCordappPackagesToScan = listOf("net.corda.vega.contracts")) {
+        driver(isDebug = true, extraCordappPackagesToScan = listOf("net.corda.vega.contracts"),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
             startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
             val nodeAFuture = startNode(providedName = nodeALegalName)
             val nodeBFuture = startNode(providedName = nodeBLegalName)

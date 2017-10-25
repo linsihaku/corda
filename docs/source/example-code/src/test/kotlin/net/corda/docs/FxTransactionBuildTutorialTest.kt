@@ -12,6 +12,7 @@ import net.corda.finance.schemas.CashSchemaV1
 import net.corda.node.internal.StartedNode
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -25,8 +26,10 @@ class FxTransactionBuildTutorialTest {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.finance.contracts.asset", CashSchemaV1::class.packageName))
-        mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        mockNet = MockNetwork(threadPerNode = true,
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.finance.contracts.asset", CashSchemaV1::class.packageName)
+        )
         nodeA = mockNet.createPartyNode()
         nodeB = mockNet.createPartyNode()
         nodeB.internals.registerInitiatedFlow(ForeignExchangeRemoteFlow::class.java)

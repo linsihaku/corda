@@ -1,28 +1,42 @@
 package net.corda.testing.node
 
 import net.corda.core.concurrent.CordaFuture
+import net.corda.core.crypto.Crypto
+import net.corda.core.crypto.DigitalSignature
+import net.corda.core.crypto.SignedData
 import net.corda.core.identity.CordaX500Name
+import net.corda.core.identity.Party
 import net.corda.core.internal.concurrent.*
+import net.corda.core.internal.copyTo
 import net.corda.core.internal.createDirectories
 import net.corda.core.internal.div
+import net.corda.core.node.NetworkParameters
+import net.corda.core.serialization.serialize
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.getOrThrow
+import net.corda.core.utilities.loggerFor
 import net.corda.node.internal.Node
 import net.corda.node.internal.StartedNode
 import net.corda.node.internal.cordapp.CordappLoader
 import net.corda.node.services.config.*
+import net.corda.node.utilities.NotaryNode
 import net.corda.node.utilities.ServiceIdentityGenerator
+import net.corda.node.utilities.testParameters
 import net.corda.nodeapi.User
 import net.corda.nodeapi.config.toConfig
 import net.corda.testing.DUMMY_MAP
+import net.corda.testing.DUMMY_MAP_KEY
 import net.corda.testing.TestDependencyInjectionBase
 import net.corda.testing.driver.addressMustNotBeBoundFuture
 import net.corda.testing.getFreeLocalPorts
 import net.corda.testing.node.MockServices.Companion.MOCK_VERSION_INFO
 import org.apache.logging.log4j.Level
 import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
@@ -31,22 +45,43 @@ import kotlin.concurrent.thread
  * purposes. Use the driver if you need to run the nodes in separate processes otherwise this class will suffice.
  */
 // TODO Some of the logic here duplicates what's in the driver
-abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyList()) : TestDependencyInjectionBase() {
+abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyList(), private val notaries: List<NotaryNode> = emptyList()) : TestDependencyInjectionBase() {
     companion object {
         private val WHITESPACE = "\\s++".toRegex()
+        val logger = loggerFor<NodeBasedTest>()
     }
 
     @Rule
     @JvmField
-    val tempFolder = TemporaryFolder()
+    val tempFolder: TemporaryFolder = TemporaryFolder()
 
     private val nodes = mutableListOf<StartedNode<Node>>()
     private var _networkMapNode: StartedNode<Node>? = null
 
     val networkMapNode: StartedNode<Node> get() = _networkMapNode ?: startNetworkMapNode()
+    private lateinit var notaryIdentities: List<Party>
+    private val validatingNotaryIdentities = mutableListOf<Party>()
+    private lateinit var networkParameters: NetworkParameters
+
+    @Before
+    fun setup() {
+        notaryIdentities = ServiceIdentityGenerator.generateNotaryIdentities(notaries, tempFolder.root.toPath())
+        val validatingNotaries = notaries.filter { it.validating }.map { it.legalNotaryName }
+        validatingNotaryIdentities.addAll(notaryIdentities.filter { it.name in validatingNotaries })
+        networkParameters = testParameters(notaryIdentities, validatingNotaryIdentities)
+    }
 
     init {
         System.setProperty("consoleLogLevel", Level.DEBUG.name().toLowerCase())
+    }
+
+    private fun saveNetworkParameters(baseDirectory: Path) {
+        val serializedParams = networkParameters.serialize()
+        val digitalSignature = DigitalSignature.WithKey(DUMMY_MAP_KEY.public, Crypto.doSign(DUMMY_MAP_KEY.private, serializedParams.bytes))
+        val signedParams = SignedData(serializedParams, digitalSignature)
+        val paramsDir = baseDirectory / "network_parameters"
+        paramsDir.createDirectories()
+        signedParams.serialize().open().copyTo(paramsDir / "network-parameters-1", StandardCopyOption.REPLACE_EXISTING)
     }
 
     /**
@@ -122,23 +157,20 @@ abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyLi
         return if (waitForConnection) node.internals.nodeReadyFuture.map { node } else doneFuture(node)
     }
 
-    // TODO This method has been added temporarily, to be deleted once the set of notaries is defined at the network level.
     fun startNotaryNode(name: CordaX500Name,
                         rpcUsers: List<User> = emptyList(),
                         validating: Boolean = true): CordaFuture<StartedNode<Node>> {
+        if (name !in notaryIdentities.map { it.name }) logger.warn("Starting notary not provided in network parameters")
         return startNode(name, rpcUsers = rpcUsers, configOverrides = mapOf("notary" to mapOf("validating" to validating)))
     }
 
     fun startNotaryCluster(notaryName: CordaX500Name, clusterSize: Int): CordaFuture<List<StartedNode<Node>>> {
+        if (notaryName !in notaryIdentities.map { it.name }) logger.warn("Starting notary not provided in network parameters")
         fun notaryConfig(nodeAddress: NetworkHostAndPort, clusterAddress: NetworkHostAndPort? = null): Map<String, Any> {
             val clusterAddresses = if (clusterAddress != null) listOf(clusterAddress) else emptyList()
             val config = NotaryConfig(validating = true, raft = RaftConfig(nodeAddress = nodeAddress, clusterAddresses = clusterAddresses))
             return mapOf("notary" to config.toConfig().root().unwrapped())
         }
-
-        ServiceIdentityGenerator.generateToDisk(
-                (0 until clusterSize).map { baseDirectory(notaryName.copy(organisation = "${notaryName.organisation}-$it")) },
-                notaryName)
 
         val nodeAddresses = getFreeLocalPorts("localhost", clusterSize)
 
@@ -175,6 +207,7 @@ abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyLi
                                   configOverrides: Map<String, Any>,
                                   noNetworkMap: Boolean = false): StartedNode<Node> {
         val baseDirectory = baseDirectory(legalName).createDirectories()
+        saveNetworkParameters(baseDirectory)
         val localPort = getFreeLocalPorts("localhost", 2)
         val p2pAddress = configOverrides["p2pAddress"] ?: localPort[0].toString()
         val config = ConfigHelper.loadConfig(

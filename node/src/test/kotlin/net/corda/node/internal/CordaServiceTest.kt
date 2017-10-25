@@ -15,6 +15,7 @@ import net.corda.finance.flows.CashIssueFlow
 import net.corda.node.internal.cordapp.DummyRPCFlow
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -81,8 +82,9 @@ class CordaServiceTest {
 
     @Before
     fun start() {
-        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.node.internal","net.corda.finance"))
-        notaryNode = mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name, validating = true)
+        mockNet = MockNetwork(threadPerNode = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.node.internal","net.corda.finance")
+        )
         nodeA = mockNet.createNode()
         mockNet.startNodes()
     }

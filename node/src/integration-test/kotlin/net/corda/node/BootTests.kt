@@ -54,7 +54,7 @@ class BootTests {
         }
     }
 
-    @Ignore("Need rewriting to produce too big network map registration (adverticed services trick doesn't work after services removal).")
+    @Ignore("Need rewriting to produce too big network map registration (advertised services trick doesn't work after services removal).")
     @Test
     fun `node quits on failure to register with network map`() {
         val tooManyAdvertisedServices = (1..100).map { ServiceInfo(ServiceType.notary.getSubType("$it")) }.toSet()

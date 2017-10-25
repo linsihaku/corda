@@ -18,6 +18,7 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.getOrThrow
+import net.corda.node.services.AttachmentLoadingTests
 import net.corda.node.services.FlowPermissions
 import net.corda.nodeapi.User
 import net.corda.testing.DUMMY_NOTARY
@@ -26,6 +27,7 @@ import net.corda.testing.driver.DriverDSLExposedInterface
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
 import org.junit.Assume
+import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 import java.lang.management.ManagementFactory
 import javax.persistence.Column
@@ -44,7 +46,8 @@ class NodeStatePersistenceTests {
 
         val user = User("mark", "dadada", setOf(FlowPermissions.startFlowPermission<SendMessageFlow>()))
         val message = Message("Hello world!")
-        driver(isDebug = true, startNodesInProcess = isQuasarAgentSpecified()) {
+        driver(isDebug = true, startNodesInProcess = isQuasarAgentSpecified(),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, false))) {
             val (nodeName, notaryNodeHandle) = {
                 val notaryNodeHandle = startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
                 val nodeHandle = startNode(rpcUsers = listOf(user)).getOrThrow()

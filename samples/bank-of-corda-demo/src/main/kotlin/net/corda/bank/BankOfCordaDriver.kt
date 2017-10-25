@@ -15,6 +15,7 @@ import net.corda.nodeapi.User
 import net.corda.testing.BOC
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import kotlin.system.exitProcess
 
 /**
@@ -57,7 +58,8 @@ private class BankOfCordaDriver {
         try {
             when (role) {
                 Role.ISSUER -> {
-                    driver(dsl = {
+                    driver(isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)),
+                            extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset")) {
                         startNotaryNode(providedName = DUMMY_NOTARY.name, validating = true)
                         val bankUser = User(
                                 BANK_USERNAME,
@@ -79,11 +81,11 @@ private class BankOfCordaDriver {
                         startNode(providedName = BIGCORP_LEGAL_NAME, rpcUsers = listOf(bigCorpUser))
                         startWebserver(bankOfCorda.get())
                         waitForAllNodesToFinish()
-                    }, isDebug = true, extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset"))
+                    }
                 }
                 else -> {
                     val requestParams = IssueRequestParams(options.valueOf(quantity), options.valueOf(currency), BIGCORP_LEGAL_NAME,
-                            "1", BOC.name, DUMMY_NOTARY.name.copy(commonName = ValidatingNotaryService.id))
+                            "1", BOC.name, DUMMY_NOTARY.name)
                     when(role) {
                         Role.ISSUE_CASH_RPC -> {
                             println("Requesting Cash via RPC ...")

@@ -9,6 +9,7 @@ import net.corda.testing.DUMMY_BANK_A
 import net.corda.testing.DUMMY_BANK_B
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import net.corda.traderdemo.flow.CommercialPaperIssueFlow
 import net.corda.traderdemo.flow.SellerFlow
 
@@ -21,7 +22,8 @@ fun main(args: Array<String>) {
             startFlowPermission<CashIssueFlow>(),
             startFlowPermission<SellerFlow>())
     val demoUser = listOf(User("demo", "demo", permissions))
-    driver(driverDirectory = "build" / "trader-demo-nodes", isDebug = true) {
+    driver(driverDirectory = "build" / "trader-demo-nodes", isDebug = true,
+            notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
         val user = User("user1", "test", permissions = setOf(startFlowPermission<CashIssueFlow>(),
                 startFlowPermission<CommercialPaperIssueFlow>(),
                 startFlowPermission<SellerFlow>()))

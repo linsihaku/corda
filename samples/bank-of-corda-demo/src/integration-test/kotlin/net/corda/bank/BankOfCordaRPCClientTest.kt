@@ -11,16 +11,19 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 
 class BankOfCordaRPCClientTest {
     @Test
     fun `issuer flow via RPC`() {
-        driver(extraCordappPackagesToScan = listOf("net.corda.finance"), dsl = {
+        driver(extraCordappPackagesToScan = listOf("net.corda.finance"),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)), isDebug = true) {
+            startNotaryNode(DUMMY_NOTARY.name, validating = false)
             val bocManager = User("bocManager", "password1", permissions = setOf(
                     startFlowPermission<CashIssueAndPaymentFlow>()))
             val bigCorpCFO = User("bigCorpCFO", "password2", permissions = emptySet())
-            val nodeBankOfCordaFuture = startNotaryNode(BOC.name, rpcUsers = listOf(bocManager), validating = false)
+            val nodeBankOfCordaFuture = startNode(providedName = BOC.name, rpcUsers = listOf(bocManager))
             val nodeBigCorporationFuture = startNode(providedName = BIGCORP_LEGAL_NAME, rpcUsers = listOf(bigCorpCFO))
             val (nodeBankOfCorda, nodeBigCorporation) = listOf(nodeBankOfCordaFuture, nodeBigCorporationFuture).map { it.getOrThrow() }
 
@@ -45,7 +48,7 @@ class BankOfCordaRPCClientTest {
 
             // Kick-off actual Issuer Flow
             val anonymous = true
-            val notary = bocProxy.notaryIdentities().first()
+            val notary = bocProxy.notaryPartyFromX500Name(DUMMY_NOTARY.name)!!
             bocProxy.startFlow(::CashIssueAndPaymentFlow,
                     1000.DOLLARS, BIG_CORP_PARTY_REF,
                     bigCorporation,
@@ -78,6 +81,6 @@ class BankOfCordaRPCClientTest {
                         }
                 )
             }
-        }, isDebug = true)
+        }
     }
 }

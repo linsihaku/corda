@@ -17,6 +17,7 @@ import net.corda.core.utilities.seconds
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.messaging.*
 import net.corda.node.services.transactions.RaftValidatingNotaryService
+import net.corda.node.utilities.NotaryNode
 import net.corda.testing.*
 import net.corda.testing.node.NodeBasedTest
 import org.assertj.core.api.Assertions.assertThat
@@ -27,14 +28,16 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-class P2PMessagingTest : NodeBasedTest() {
+class P2PMessagingTest : NodeBasedTest(
+        notaries = listOf(NotaryNode.Cluster(DISTRIBUTED_SERVICE_NAME, clusterSize = 2, validating = true, raft = true))
+) {
     private companion object {
-        val DISTRIBUTED_SERVICE_NAME = CordaX500Name(RaftValidatingNotaryService.id, "DistributedService", "London", "GB")
+        val DISTRIBUTED_SERVICE_NAME = CordaX500Name("DistributedService", "London", "GB")
     }
 
     @Test
     fun `network map will work after restart`() {
-        val identities = listOf(DUMMY_BANK_A, DUMMY_BANK_B, DUMMY_NOTARY)
+        val identities = listOf(DUMMY_BANK_A, DUMMY_BANK_B, DUMMY_BANK_C)
         fun startNodes() = identities.map { startNode(it.name) }.transpose()
 
         val startUpDuration = elapsedTime { startNodes().getOrThrow() }

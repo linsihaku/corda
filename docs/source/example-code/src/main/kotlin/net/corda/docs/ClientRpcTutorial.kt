@@ -19,6 +19,7 @@ import net.corda.nodeapi.User
 import net.corda.testing.ALICE
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import org.graphstream.graph.Edge
 import org.graphstream.graph.Node
 import org.graphstream.graph.implementations.MultiGraph
@@ -46,7 +47,8 @@ fun main(args: Array<String>) {
             startFlowPermission<CashPaymentFlow>(),
             startFlowPermission<CashExitFlow>()))
 
-    driver(driverDirectory = baseDirectory, extraCordappPackagesToScan = listOf("net.corda.finance")) {
+    driver(driverDirectory = baseDirectory, extraCordappPackagesToScan = listOf("net.corda.finance"),
+            notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = true))) {
         startNotaryNode(DUMMY_NOTARY.name)
         val node = startNode(providedName = ALICE.name, rpcUsers = listOf(user)).get()
         // END 1

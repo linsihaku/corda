@@ -49,6 +49,9 @@ class NotaryFlow {
             progressTracker.currentStep = REQUESTING
 
             val notaryParty = stx.notary ?: throw IllegalStateException("Transaction does not specify a Notary")
+            check(notaryParty in serviceHub.networkMapCache.notaryIdentities) {
+                "Notary party not in network parameters notary list"
+            }
             check(stx.inputs.all { stateRef -> serviceHub.loadState(stateRef).notary == notaryParty }) {
                 "Input states must have the same Notary"
             }

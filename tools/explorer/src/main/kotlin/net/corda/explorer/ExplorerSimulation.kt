@@ -28,6 +28,7 @@ import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.PortAllocation
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import java.time.Instant
 import java.util.*
 
@@ -65,7 +66,8 @@ class ExplorerSimulation(val options: OptionSet) {
 
     private fun startDemoNodes() {
         val portAllocation = PortAllocation.Incremental(20000)
-        driver(portAllocation = portAllocation, extraCordappPackagesToScan = listOf("net.corda.finance")) {
+        driver(portAllocation = portAllocation, extraCordappPackagesToScan = listOf("net.corda.finance"),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
             // TODO : Supported flow should be exposed somehow from the node instead of set of ServiceInfo.
             val notary = startNotaryNode(DUMMY_NOTARY.name, customOverrides = mapOf("nearestCity" to "Zurich"), validating = false)
             val alice = startNode(providedName = ALICE.name, rpcUsers = arrayListOf(user),

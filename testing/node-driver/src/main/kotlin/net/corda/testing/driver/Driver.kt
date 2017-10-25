@@ -11,16 +11,19 @@ import net.corda.cordform.CordformNode
 import net.corda.core.CordaException
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.concurrent.firstOf
+import net.corda.core.crypto.Crypto
+import net.corda.core.crypto.DigitalSignature
+import net.corda.core.crypto.SignedData
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
-import net.corda.core.internal.ThreadBox
+import net.corda.core.internal.*
 import net.corda.core.internal.concurrent.*
-import net.corda.core.internal.div
-import net.corda.core.internal.times
 import net.corda.core.messaging.CordaRPCOps
+import net.corda.core.node.NetworkParameters
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.toFuture
+import net.corda.core.serialization.serialize
 import net.corda.core.utilities.*
 import net.corda.node.internal.Node
 import net.corda.node.internal.NodeStartup
@@ -28,8 +31,10 @@ import net.corda.node.internal.StartedNode
 import net.corda.node.internal.cordapp.CordappLoader
 import net.corda.node.services.config.*
 import net.corda.node.services.network.NetworkMapService
+import net.corda.node.utilities.NotaryNode
 import net.corda.node.utilities.ServiceIdentityGenerator
 import net.corda.nodeapi.NodeInfoFilesCopier
+import net.corda.node.utilities.testParameters
 import net.corda.nodeapi.User
 import net.corda.nodeapi.config.toConfig
 import net.corda.nodeapi.internal.addShutdownHook
@@ -44,6 +49,7 @@ import java.io.File
 import java.net.*
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset.UTC
@@ -67,7 +73,6 @@ import kotlin.concurrent.thread
  *
  * TODO this file is getting way too big, it should be split into several files.
  */
-
 private val log: Logger = loggerFor<DriverDSL>()
 
 private val DEFAULT_POLL_INTERVAL = 500.millis
@@ -100,7 +105,6 @@ interface DriverDSLExposedInterface : CordformContext {
             startInSameProcess: Boolean? = defaultParameters.startInSameProcess,
             maximumHeapSize: String = defaultParameters.maximumHeapSize): CordaFuture<NodeHandle>
 
-    // TODO This method has been added temporarily, to be deleted once the set of notaries is defined at the network level.
     fun startNotaryNode(providedName: CordaX500Name,
                         rpcUsers: List<User> = emptyList(),
                         verifierType: VerifierType = VerifierType.InMemory,
@@ -316,6 +320,8 @@ data class NodeParameters(
  * @param useTestClock If true the test clock will be used in Node.
  * @param startNodesInProcess Provides the default behaviour of whether new nodes should start inside this process or
  *     not. Note that this may be overridden in [DriverDSLExposedInterface.startNode].
+ * @param notaryIdentities define the notaries that will be advertised in [NetworkParameters] for this network. The notaries
+ *     identities will be generated, but you have to start nodes manually.
  * @param dsl The dsl itself.
  * @return The value returned in the [dsl] closure.
  */
@@ -331,6 +337,7 @@ fun <A> driver(
 
         startNodesInProcess: Boolean = defaultParameters.startNodesInProcess,
         extraCordappPackagesToScan: List<String> = defaultParameters.extraCordappPackagesToScan,
+        notaries: List<NotaryNode> = defaultParameters.notaries,
         dsl: DriverDSLExposedInterface.() -> A
 ): A {
     return genericDriver(
@@ -342,7 +349,8 @@ fun <A> driver(
                     useTestClock = useTestClock,
                     isDebug = isDebug,
                     startNodesInProcess = startNodesInProcess,
-                    extraCordappPackagesToScan = extraCordappPackagesToScan
+                    extraCordappPackagesToScan = extraCordappPackagesToScan,
+                    notaries = notaries
             ),
             coerce = { it },
             dsl = dsl,
@@ -375,7 +383,8 @@ data class DriverParameters(
         val useTestClock: Boolean = false,
         val initialiseSerialization: Boolean = true,
         val startNodesInProcess: Boolean = false,
-        val extraCordappPackagesToScan: List<String> = emptyList()
+        val extraCordappPackagesToScan: List<String> = emptyList(),
+        val notaries: List<NotaryNode> = emptyList()
 ) {
     fun setIsDebug(isDebug: Boolean) = copy(isDebug = isDebug)
     fun setDriverDirectory(driverDirectory: Path) = copy(driverDirectory = driverDirectory)
@@ -386,6 +395,7 @@ data class DriverParameters(
     fun setInitialiseSerialization(initialiseSerialization: Boolean) = copy(initialiseSerialization = initialiseSerialization)
     fun setStartNodesInProcess(startNodesInProcess: Boolean) = copy(startNodesInProcess = startNodesInProcess)
     fun setExtraCordappPackagesToScan(extraCordappPackagesToScan: List<String>) = copy(extraCordappPackagesToScan = extraCordappPackagesToScan)
+    fun setNotaries(notaries: List<NotaryNode>) = copy(notaries = notaries)
 }
 
 /**
@@ -649,7 +659,8 @@ class DriverDSL(
         val useTestClock: Boolean,
         val isDebug: Boolean,
         val startNodesInProcess: Boolean,
-        extraCordappPackagesToScan: List<String>
+        extraCordappPackagesToScan: List<String>,
+        val notaries: List<NotaryNode>
 ) : DriverDSLInternalInterface {
     private var _executorService: ScheduledExecutorService? = null
     val executorService get() = _executorService!!
@@ -662,6 +673,9 @@ class DriverDSL(
     private val nodeInfoFilesCopier = NodeInfoFilesCopier()
     // Map from a nodes legal name to an observable emitting the number of nodes in its network map.
     private val countObservables = mutableMapOf<CordaX500Name, Observable<Int>>()
+    private val notaryIdentities = mutableListOf<Party>()
+    private val validatingNotaryIdentities = mutableListOf<Party>()
+    private lateinit var networkParameters: NetworkParameters
 
     class State {
         val processes = ArrayList<CordaFuture<Process>>()
@@ -749,15 +763,6 @@ class DriverDSL(
         return startNodeInternal(config, webAddress, startInSameProcess, maximumHeapSize)
     }
 
-    override fun startNotaryNode(providedName: CordaX500Name,
-                                 rpcUsers: List<User>,
-                                 verifierType: VerifierType,
-                                 customOverrides: Map<String, Any?>,
-                                 validating: Boolean): CordaFuture<NodeHandle> {
-        val config = customOverrides + NotaryConfig(validating).toConfigMap()
-        return startNode(providedName = providedName, rpcUsers = rpcUsers, verifierType = verifierType, customOverrides = config)
-    }
-
     override fun startNodes(nodes: List<CordformNode>, startInSameProcess: Boolean?, maximumHeapSize: String): List<CordaFuture<NodeHandle>> {
         return nodes.map { node ->
             portAllocation.nextHostAndPort() // rpcAddress
@@ -777,9 +782,19 @@ class DriverDSL(
         }
     }
 
-    // TODO This mapping is done is several plaecs including the gradle plugin. In general we need a better way of
+    // TODO This mapping is done is several places including the gradle plugin. In general we need a better way of
     // generating the configs for the nodes, probably making use of Any.toConfig()
     private fun NotaryConfig.toConfigMap(): Map<String, Any> = mapOf("notary" to toConfig().root().unwrapped())
+
+    override fun startNotaryNode(providedName: CordaX500Name,
+                                 rpcUsers: List<User>,
+                                 verifierType: VerifierType,
+                                 customOverrides: Map<String, Any?>,
+                                 validating: Boolean): CordaFuture<NodeHandle> {
+        if (providedName !in notaryIdentities.map { it.name }) log.warn("Starting notary not provided in network parameters")
+        val config = customOverrides + NotaryConfig(validating).toConfigMap()
+        return startNode(providedName = providedName, rpcUsers = rpcUsers, verifierType = verifierType, customOverrides = config)
+    }
 
     override fun startNotaryCluster(
             notaryName: CordaX500Name,
@@ -788,15 +803,13 @@ class DriverDSL(
             rpcUsers: List<User>,
             startInSameProcess: Boolean?
     ): CordaFuture<Pair<Party, List<NodeHandle>>> {
+        if (notaryName !in notaryIdentities.map { it.name }) log.warn("Starting notary not provided in network parameters")
         fun notaryConfig(nodeAddress: NetworkHostAndPort, clusterAddress: NetworkHostAndPort? = null): Map<String, Any> {
             val clusterAddresses = if (clusterAddress != null) listOf(clusterAddress) else emptyList()
             val config = NotaryConfig(validating = true, raft = RaftConfig(nodeAddress = nodeAddress, clusterAddresses = clusterAddresses))
             return config.toConfigMap()
         }
-
-        val nodeNames = (0 until clusterSize).map { CordaX500Name("Notary Service $it", "Zurich", "CH") }
-        val paths = nodeNames.map { baseDirectory(it) }
-        ServiceIdentityGenerator.generateToDisk(paths, notaryName)
+        val nodeNames = ServiceIdentityGenerator.distributedNotaryNodeNames(notaryName, clusterSize)
         val clusterAddress = portAllocation.nextHostAndPort()
 
         // Start the first node that will bootstrap the cluster
@@ -857,6 +870,10 @@ class DriverDSL(
         _executorService = Executors.newScheduledThreadPool(2, ThreadFactoryBuilder().setNameFormat("driver-pool-thread-%d").build())
         _shutdownManager = ShutdownManager(executorService)
         shutdownManager.registerShutdown { nodeInfoFilesCopier.close() }
+        notaryIdentities.addAll(ServiceIdentityGenerator.generateNotaryIdentities(notaries, driverDirectory))
+        val validatingNotaries = notaries.filter { it.validating }.map { it.legalNotaryName }
+        validatingNotaryIdentities.addAll(notaryIdentities.filter { it.name in validatingNotaries })
+        networkParameters = testParameters(notaryIdentities, validatingNotaryIdentities)
     }
 
     fun baseDirectory(nodeName: CordaX500Name): Path {
@@ -911,8 +928,17 @@ class DriverDSL(
         return future
     }
 
+    private fun saveNetworkParameters(baseDirectory: Path) {
+        val digitalSignature = DigitalSignature.WithKey(DUMMY_MAP_KEY.public, Crypto.doSign(DUMMY_MAP_KEY.private, networkParameters.serialize().bytes))
+        val signedParams = SignedData(networkParameters.serialize(), digitalSignature)
+        val paramsDir = baseDirectory / "network_parameters"
+        paramsDir.createDirectories()
+        signedParams.serialize().open().copyTo(paramsDir / "network-parameters-1", StandardCopyOption.REPLACE_EXISTING)
+    }
+
     private fun startNodeInternal(config: Config, webAddress: NetworkHostAndPort, startInProcess: Boolean?, maximumHeapSize: String): CordaFuture<NodeHandle> {
         val nodeConfiguration = config.parseAsNodeConfiguration()
+        saveNetworkParameters(nodeConfiguration.baseDirectory)
         nodeInfoFilesCopier.addConfig(nodeConfiguration.baseDirectory)
         val onNodeExit: () -> Unit = {
             nodeInfoFilesCopier.removeConfig(nodeConfiguration.baseDirectory)

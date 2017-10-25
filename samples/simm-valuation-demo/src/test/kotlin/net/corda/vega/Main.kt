@@ -6,6 +6,7 @@ import net.corda.testing.DUMMY_BANK_B
 import net.corda.testing.DUMMY_BANK_C
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 
 /**
  * Sample main used for running within an IDE. Starts 4 nodes (A, B, C and Notary/Controller) as an alternative to running via gradle
@@ -13,7 +14,7 @@ import net.corda.testing.driver.driver
  * via the web api.
  */
 fun main(args: Array<String>) {
-    driver(dsl = {
+    driver(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)), isDebug = true) {
         val notaryFuture = startNotaryNode(DUMMY_NOTARY.name, validating = false)
         val nodeAFuture = startNode(providedName = DUMMY_BANK_A.name)
         val nodeBFuture = startNode(providedName = DUMMY_BANK_B.name)
@@ -25,5 +26,5 @@ fun main(args: Array<String>) {
         startWebserver(nodeC)
 
         waitForAllNodesToFinish()
-    }, isDebug = true)
+    }
 }

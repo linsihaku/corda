@@ -3,16 +3,22 @@ package net.corda.node.internal
 import com.codahale.metrics.JmxReporter
 import net.corda.core.CordaException
 import net.corda.core.concurrent.CordaFuture
+import net.corda.core.crypto.SignedData
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.concurrent.doneFuture
 import net.corda.core.internal.concurrent.flatMap
 import net.corda.core.internal.concurrent.openFuture
 import net.corda.core.internal.concurrent.thenMatch
+import net.corda.core.internal.div
+import net.corda.core.internal.exists
+import net.corda.core.internal.readAll
 import net.corda.core.internal.uncheckedCast
 import net.corda.core.messaging.RPCOps
+import net.corda.core.node.NetworkParameters
 import net.corda.core.node.ServiceHub
 import net.corda.core.serialization.SerializationDefaults
+import net.corda.core.serialization.deserialize
 import net.corda.core.utilities.*
 import net.corda.node.VersionInfo
 import net.corda.node.internal.cordapp.CordappLoader
@@ -33,6 +39,7 @@ import net.corda.node.services.network.PersistentNetworkMapService
 import net.corda.node.utilities.AddressUtils
 import net.corda.node.utilities.AffinityExecutor
 import net.corda.node.utilities.TestClock
+import net.corda.node.utilities.testParameters
 import net.corda.nodeapi.ArtemisMessagingComponent
 import net.corda.nodeapi.ArtemisMessagingComponent.Companion.IP_REQUEST_PREFIX
 import net.corda.nodeapi.ArtemisMessagingComponent.Companion.PEER_USER
@@ -169,6 +176,15 @@ open class Node(override val configuration: NodeConfiguration,
                 advertisedAddress)
     }
 
+    // TODO don't need that function after Al's changes
+    override fun readNetworkParameters(): NetworkParameters {
+        val file = configuration.baseDirectory / "network_parameters" / "network-parameters-1"
+        val networkParams = if (file.exists())
+            file.readAll().deserialize<SignedData<NetworkParameters>>().verified()
+        else testParameters(emptyList(), emptyList())
+        return networkParams
+    }
+
     private fun makeLocalMessageBroker(): NetworkHostAndPort {
         with(configuration) {
             messageBroker = ArtemisMessagingServer(this, p2pAddress.port, rpcAddress?.port, services.networkMapCache, userService)
@@ -279,7 +295,8 @@ open class Node(override val configuration: NodeConfiguration,
     }
 
     override fun makeNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal): NetworkMapService {
-        return PersistentNetworkMapService(network, networkMapCache, configuration.minimumPlatformVersion)
+        return PersistentNetworkMapService(services.networkService, services.networkMapCache, services.keyManagementService,
+                services.myInfo.legalIdentities.first().owningKey, configuration.minimumPlatformVersion, readNetworkParameters())
     }
 
     /**

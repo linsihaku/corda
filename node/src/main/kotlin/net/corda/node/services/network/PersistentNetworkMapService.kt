@@ -4,6 +4,8 @@ import net.corda.core.crypto.toStringShort
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.ThreadBox
 import net.corda.core.messaging.SingleMessageRecipient
+import net.corda.core.node.NetworkParameters
+import net.corda.core.node.services.KeyManagementService
 import net.corda.core.serialization.SerializationDefaults
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
@@ -14,6 +16,7 @@ import net.corda.node.utilities.NODE_DATABASE_PREFIX
 import net.corda.node.utilities.PersistentMap
 import net.corda.nodeapi.ArtemisMessagingComponent
 import java.io.ByteArrayInputStream
+import java.security.PublicKey
 import java.security.cert.CertificateFactory
 import javax.persistence.*
 import java.util.*
@@ -26,8 +29,13 @@ import java.util.*
  * This class needs database transactions to be in-flight during method calls and init, otherwise it will throw
  * exceptions.
  */
-class PersistentNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal, minimumPlatformVersion: Int)
-    : AbstractNetworkMapService(network, networkMapCache, minimumPlatformVersion) {
+class PersistentNetworkMapService(network: MessagingService,
+                                  networkMapCache: NetworkMapCacheInternal,
+                                  keyManagementService: KeyManagementService,
+                                  key: PublicKey,
+                                  minimumPlatformVersion: Int,
+                                  networkParameters: NetworkParameters)
+    : AbstractNetworkMapService(network, networkMapCache, keyManagementService, key, minimumPlatformVersion, networkParameters) {
 
     // Only the node_party_path column is needed to reconstruct a PartyAndCertificate but we have the others for human readability
     @Entity

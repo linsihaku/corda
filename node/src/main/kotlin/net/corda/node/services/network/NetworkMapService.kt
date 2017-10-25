@@ -2,14 +2,17 @@ package net.corda.node.services.network
 
 import net.corda.core.CordaException
 import net.corda.core.crypto.DigitalSignature
+import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.SignedData
 import net.corda.core.crypto.isFulfilledBy
 import net.corda.core.crypto.random63BitValue
+import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.ThreadBox
 import net.corda.core.internal.VisibleForTesting
 import net.corda.core.messaging.MessageRecipients
 import net.corda.core.messaging.SingleMessageRecipient
+import net.corda.core.node.NetworkParameters
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.KeyManagementService
 import net.corda.core.node.services.NetworkMapCache
@@ -32,6 +35,7 @@ import net.corda.node.services.network.NetworkMapService.Companion.PUSH_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.QUERY_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.PARAMETERS_TOPIC
 import net.corda.node.utilities.AddOrRemove
 import net.corda.node.utilities.AddOrRemove.ADD
 import net.corda.node.utilities.AddOrRemove.REMOVE
@@ -72,6 +76,8 @@ interface NetworkMapService {
         const val PUSH_TOPIC = "platform.network_map.push"
         // Base topic for messages acknowledging pushed updates
         const val PUSH_ACK_TOPIC = "platform.network_map.push_ack"
+        // Fetch network parameters topic.
+        val PARAMETERS_TOPIC = "platform.network_map.parameters"
     }
 
     data class FetchMapRequest(val subscribe: Boolean,
@@ -80,7 +86,13 @@ interface NetworkMapService {
                                override val sessionID: Long = random63BitValue()) : ServiceRequestMessage
 
     @CordaSerializable
-    data class FetchMapResponse(val nodes: List<NodeRegistration>?, val version: Int)
+    data class FetchMapResponse(val networkMap: NetworkMap, val nodes: List<NodeRegistration>?, val version: Int)
+
+    data class FetchParametersRequest(override val replyTo: SingleMessageRecipient,
+                                      override val sessionID: Long = random63BitValue()) : ServiceRequestMessage
+
+    @CordaSerializable
+    data class FetchParametersResponse(val signedParameters: SignedData<NetworkParameters>)
 
     data class QueryIdentityRequest(val identity: PartyAndCertificate,
                                     override val replyTo: SingleMessageRecipient,
@@ -115,8 +127,13 @@ interface NetworkMapService {
 object NullNetworkMapService : NetworkMapService
 
 @ThreadSafe
-class InMemoryNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal, minimumPlatformVersion: Int)
-    : AbstractNetworkMapService(network, networkMapCache, minimumPlatformVersion) {
+class InMemoryNetworkMapService(network: MessagingService,
+                                networkMapCache: NetworkMapCacheInternal,
+                                keyManagementService: KeyManagementService,
+                                key: PublicKey,
+                                minimumPlatformVersion: Int,
+                                networkParameters: NetworkParameters)
+    : AbstractNetworkMapService(network, networkMapCache, keyManagementService, key, minimumPlatformVersion, networkParameters) {
 
     override val nodeRegistrations: MutableMap<PartyAndCertificate, NodeRegistrationInfo> = ConcurrentHashMap()
     override val subscribers = ThreadBox(mutableMapOf<SingleMessageRecipient, LastAcknowledgeInfo>())
@@ -125,7 +142,6 @@ class InMemoryNetworkMapService(network: MessagingService, networkMapCache: Netw
         setup()
     }
 }
-
 /**
  * Abstracted out core functionality as the basis for a persistent implementation, as well as existing in-memory implementation.
  *
@@ -135,7 +151,10 @@ class InMemoryNetworkMapService(network: MessagingService, networkMapCache: Netw
 @ThreadSafe
 abstract class AbstractNetworkMapService(network: MessagingService,
                                          private val networkMapCache: NetworkMapCacheInternal,
-                                         private val minimumPlatformVersion: Int) : NetworkMapService, AbstractNodeService(network) {
+                                         private val keyManagementService: KeyManagementService,
+                                         private val key: PublicKey,
+                                         private val minimumPlatformVersion: Int,
+                                         val networkParameters: NetworkParameters) : NetworkMapService, AbstractNodeService(network) {
     companion object {
         /**
          * Maximum credible size for a registration request. Generally requests are around 2000-6000 bytes, so this gives a
@@ -166,6 +185,7 @@ abstract class AbstractNetworkMapService(network: MessagingService,
         handlers += addMessageHandler(QUERY_TOPIC) { req: QueryIdentityRequest -> processQueryRequest(req) }
         handlers += addMessageHandler(REGISTER_TOPIC) { req: RegistrationRequest -> processRegistrationRequest(req) }
         handlers += addMessageHandler(SUBSCRIPTION_TOPIC) { req: SubscribeRequest -> processSubscriptionRequest(req) }
+        handlers += addMessageHandler(PARAMETERS_TOPIC) { req: FetchParametersRequest -> processFetchParametersRequest()}
         handlers += network.addMessageHandler(PUSH_ACK_TOPIC) { message, _ ->
             val req = message.data.deserialize<UpdateAcknowledge>()
             processAcknowledge(req)
@@ -215,7 +235,10 @@ abstract class AbstractNetworkMapService(network: MessagingService,
         } else {
             null
         }
-        return FetchMapResponse(nodeRegistrations, currentVersion)
+        logger.info("Finishing Fetch map request process")
+        // TODO These entryHashes for now don't make much sense, because we don't have new network map infrastructure in place yet.
+        return FetchMapResponse(NetworkMap(nodeRegistrations?.map { it.serialize().hash } ?: emptyList(), networkParameters.serialize().hash),
+                nodeRegistrations, currentVersion)
     }
 
     private fun processQueryRequest(request: QueryIdentityRequest): QueryIdentityResponse {
@@ -283,6 +306,13 @@ abstract class AbstractNetworkMapService(network: MessagingService,
         }
 
         return RegistrationResponse(null)
+    }
+
+    private fun processFetchParametersRequest(): FetchParametersResponse {
+        logger.info("Net map received fetch parameters")
+        val serializedParams = networkParameters.serialize()
+        val signedParams = SignedData(serializedParams, keyManagementService.sign(serializedParams.bytes, key))
+        return FetchParametersResponse(signedParams)
     }
 
     private fun notifySubscribers(wireReg: WireNodeRegistration, newMapVersion: Int) {
@@ -366,3 +396,10 @@ data class LastAcknowledgeInfo(val mapVersion: Int)
 
 @CordaSerializable
 data class NodeRegistrationInfo(val reg: NodeRegistration, val mapVersion: Int)
+
+// TODO Part of NetworkMapService redesign.
+@CordaSerializable
+data class NetworkMap(
+        val entryHashes: List<SecureHash>,
+        val parametersHash: SecureHash
+)

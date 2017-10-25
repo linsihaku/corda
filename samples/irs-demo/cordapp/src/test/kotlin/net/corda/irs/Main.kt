@@ -5,13 +5,14 @@ import net.corda.testing.DUMMY_BANK_A
 import net.corda.testing.DUMMY_BANK_B
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 
 /**
  * This file is exclusively for being able to run your nodes through an IDE (as opposed to running deployNodes)
  * Do not use in a production environment.
  */
 fun main(args: Array<String>) {
-    driver(dsl = {
+    driver(useTestClock = true, isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))){
         val (controller, nodeA, nodeB) = listOf(
                 startNotaryNode(DUMMY_NOTARY.name, validating = false),
                 startNode(providedName = DUMMY_BANK_A.name),
@@ -23,5 +24,5 @@ fun main(args: Array<String>) {
         startWebserver(nodeB)
 
         waitForAllNodesToFinish()
-    }, useTestClock = true, isDebug = true)
+    }
 }

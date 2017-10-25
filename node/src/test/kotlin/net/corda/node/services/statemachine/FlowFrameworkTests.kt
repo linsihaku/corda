@@ -34,6 +34,7 @@ import net.corda.testing.node.InMemoryMessagingNetwork.ServicePeerAllocationStra
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNetwork.MockNode
 import net.corda.testing.node.MockNodeParameters
+import net.corda.node.utilities.NotaryNode
 import net.corda.testing.node.pumpReceive
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -72,15 +73,13 @@ class FlowFrameworkTests {
 
     @Before
     fun start() {
-        mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin(), cordappPackages = listOf("net.corda.finance.contracts", "net.corda.testing.contracts"))
+        mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin(),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.finance.contracts", "net.corda.testing.contracts")
+        )
         aliceNode = mockNet.createNode(MockNodeParameters(legalName = ALICE_NAME))
         bobNode = mockNet.createNode(MockNodeParameters(legalName = BOB_NAME))
         mockNet.runNetwork()
-
-        // We intentionally create our own notary and ignore the one provided by the network
-        // Note that these notaries don't operate correctly as they don't share their state. They are only used for testing
-        // service addressing.
-        val notary = mockNet.createNotaryNode()
 
         receivedSessionMessagesObservable().forEach { receivedSessionMessages += it }
         mockNet.runNetwork()
@@ -88,7 +87,7 @@ class FlowFrameworkTests {
         // Extract identities
         alice = aliceNode.info.singleIdentity()
         bob = bobNode.info.singleIdentity()
-        notaryIdentity = notary.services.getDefaultNotary()
+        notaryIdentity = aliceNode.services.getDefaultNotary()
     }
 
     @After

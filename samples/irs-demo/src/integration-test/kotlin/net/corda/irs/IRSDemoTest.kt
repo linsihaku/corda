@@ -24,6 +24,7 @@ import net.corda.nodeapi.User
 import net.corda.test.spring.springDriver
 import net.corda.testing.*
 import net.corda.testing.http.HttpApi
+import net.corda.node.utilities.NotaryNode
 import org.apache.commons.io.IOUtils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
@@ -48,7 +49,7 @@ class IRSDemoTest : IntegrationTestCategory {
 
     @Test
     fun `runs IRS demo`() {
-        springDriver(useTestClock = true, isDebug = true, extraCordappPackagesToScan = listOf("net.corda.irs")) {
+        springDriver(useTestClock = true, isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)), extraCordappPackagesToScan = listOf("net.corda.irs")) {
             val (controller, nodeA, nodeB) = listOf(
                     startNotaryNode(DUMMY_NOTARY.name, validating = true, rpcUsers = rpcUsers),
                     startNode(providedName = DUMMY_BANK_A.name, rpcUsers = rpcUsers),

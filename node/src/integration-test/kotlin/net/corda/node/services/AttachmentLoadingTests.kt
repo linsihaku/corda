@@ -28,6 +28,7 @@ import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
 import net.corda.testing.eventually
 import net.corda.testing.node.MockServices
+import net.corda.node.utilities.NotaryNode
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -115,7 +116,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
 
     @Test
     fun `test that attachments retrieved over the network are not used for code`() {
-        driver(initialiseSerialization = false) {
+        driver(initialiseSerialization = false, notaries = listOf(NotaryNode.Single(notaryName, false))) {
             installIsolatedCordappTo(bankAName)
             val (bankA, bankB, _) = createTwoNodesAndNotary()
             eventuallyPassingTest {
@@ -128,7 +129,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
 
     @Test
     fun `tests that if the attachment is loaded on both sides already that a flow can run`() {
-        driver(initialiseSerialization = false) {
+        driver(initialiseSerialization = false, notaries = listOf(NotaryNode.Single(notaryName, false))) {
             installIsolatedCordappTo(bankAName)
             installIsolatedCordappTo(bankBName)
             val (bankA, bankB, _) = createTwoNodesAndNotary()

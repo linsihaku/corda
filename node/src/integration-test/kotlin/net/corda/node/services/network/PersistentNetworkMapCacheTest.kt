@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 private const val BRIDGE_RETRY_MS: Long = 100
 
 class PersistentNetworkMapCacheTest : NodeBasedTest() {
-    private val partiesList = listOf(DUMMY_NOTARY, ALICE, BOB)
+    private val partiesList = listOf(DUMMY_MAP, ALICE, BOB)
     private val addressesMap: HashMap<CordaX500Name, NetworkHostAndPort> = HashMap()
     private val infos: MutableSet<NodeInfo> = HashSet()
 
@@ -50,8 +50,8 @@ class PersistentNetworkMapCacheTest : NodeBasedTest() {
         alice.database.transaction {
             val res = netCache.getNodeByLegalIdentity(alice.info.chooseIdentity())
             assertEquals(alice.info, res)
-            val res2 = netCache.getNodeByLegalName(DUMMY_NOTARY.name)
-            assertEquals(infos.singleOrNull { DUMMY_NOTARY.name in it.legalIdentitiesAndCerts.map { it.name } }, res2)
+            val res2 = netCache.getNodeByLegalName(DUMMY_MAP.name)
+            assertEquals(infos.singleOrNull { DUMMY_MAP.name in it.legalIdentitiesAndCerts.map { it.name } }, res2)
         }
     }
 
@@ -130,7 +130,7 @@ class PersistentNetworkMapCacheTest : NodeBasedTest() {
             assertThat(it.services.networkMapCache.allNodes).doesNotContain(charlie.info)
         }
         // Start Network Map and see that charlie node appears in caches.
-        val nms = customNodesStart(listOf(DUMMY_NOTARY)).single()
+        val nms = customNodesStart(listOf(DUMMY_MAP)).single()
         nms.internals.startupComplete.get()
         assertTrue(nms.inNodeNetworkMapService != NullNetworkMapService)
         assertTrue(infos.any { it.legalIdentities.toSet() == nms.info.legalIdentities.toSet() })
@@ -168,7 +168,7 @@ class PersistentNetworkMapCacheTest : NodeBasedTest() {
         return nodesToStart.map { party ->
             val configOverrides = (addressesMap[party.name]?.let { mapOf("p2pAddress" to it.toString()) } ?: emptyMap()) +
                     (customRetryIntervalMs?.let { mapOf("activeMQServer.bridge.retryIntervalMs" to it.toString()) } ?: emptyMap())
-            if (party == DUMMY_NOTARY) {
+            if (party == DUMMY_MAP) {
                 startNetworkMapNode(party.name, configOverrides = configOverrides)
             } else {
                 startNode(party.name,

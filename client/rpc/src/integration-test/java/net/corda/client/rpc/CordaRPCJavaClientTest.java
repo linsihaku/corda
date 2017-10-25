@@ -11,6 +11,7 @@ import net.corda.finance.flows.CashPaymentFlow;
 import net.corda.finance.schemas.CashSchemaV1;
 import net.corda.node.internal.Node;
 import net.corda.node.internal.StartedNode;
+import net.corda.node.utilities.NotaryNode;
 import net.corda.nodeapi.User;
 import net.corda.testing.CoreTestUtils;
 import net.corda.testing.node.NodeBasedTest;
@@ -28,11 +29,11 @@ import static kotlin.test.AssertionsKt.assertEquals;
 import static net.corda.finance.Currencies.DOLLARS;
 import static net.corda.finance.contracts.GetBalances.getCashBalance;
 import static net.corda.node.services.FlowPermissions.startFlowPermission;
-import static net.corda.testing.TestConstants.getALICE;
+import static net.corda.testing.TestConstants.getDUMMY_NOTARY;
 
 public class CordaRPCJavaClientTest extends NodeBasedTest {
     public CordaRPCJavaClientTest() {
-        super(Arrays.asList("net.corda.finance.contracts", CashSchemaV1.class.getPackage().getName()));
+        super(Arrays.asList("net.corda.finance.contracts", CashSchemaV1.class.getPackage().getName()), Collections.singletonList(new NotaryNode.Single(getDUMMY_NOTARY().getName(), true)));
     }
 
     private List<String> perms = Arrays.asList(startFlowPermission(CashPaymentFlow.class), startFlowPermission(CashIssueFlow.class));
@@ -51,7 +52,7 @@ public class CordaRPCJavaClientTest extends NodeBasedTest {
 
     @Before
     public void setUp() throws ExecutionException, InterruptedException {
-        CordaFuture<StartedNode<Node>> nodeFuture = startNotaryNode(getALICE().getName(), singletonList(rpcUser), true);
+        CordaFuture<StartedNode<Node>> nodeFuture = startNotaryNode(getDUMMY_NOTARY().getName(), singletonList(rpcUser), true);
         node = nodeFuture.get();
         client = new CordaRPCClient(requireNonNull(node.getInternals().getConfiguration().getRpcAddress()));
     }

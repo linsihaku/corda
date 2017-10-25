@@ -7,16 +7,17 @@ import com.nhaarman.mockito_kotlin.whenever
 import net.corda.core.crypto.entropyToKeyPair
 import net.corda.core.crypto.random63BitValue
 import net.corda.core.identity.CordaX500Name
+import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
+import net.corda.core.internal.*
 import net.corda.core.internal.concurrent.doneFuture
-import net.corda.core.internal.createDirectories
-import net.corda.core.internal.createDirectory
-import net.corda.core.internal.uncheckedCast
 import net.corda.core.messaging.MessageRecipients
 import net.corda.core.messaging.RPCOps
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.services.IdentityService
+import net.corda.core.node.NetworkParameters
 import net.corda.core.node.services.KeyManagementService
+import net.corda.core.node.services.NotaryService
 import net.corda.core.serialization.SerializationWhitelist
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.getOrThrow
@@ -36,7 +37,7 @@ import net.corda.node.services.network.NetworkMapService
 import net.corda.node.services.transactions.BFTNonValidatingNotaryService
 import net.corda.node.services.transactions.BFTSMaRt
 import net.corda.node.services.transactions.InMemoryTransactionVerifierService
-import net.corda.node.utilities.AffinityExecutor
+import net.corda.node.utilities.*
 import net.corda.node.utilities.AffinityExecutor.ServiceAffinityExecutor
 import net.corda.nodeapi.internal.ServiceInfo
 import net.corda.testing.DUMMY_NOTARY
@@ -50,6 +51,7 @@ import org.slf4j.Logger
 import java.io.Closeable
 import java.math.BigInteger
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.concurrent.TimeUnit
@@ -117,16 +119,15 @@ data class MockNodeArgs(
  *
  *    LogHelper.setLevel("+messages")
  */
-class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParameters(),
-                  private val networkSendManuallyPumped: Boolean = defaultParameters.networkSendManuallyPumped,
+class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParameters(),private val networkSendManuallyPumped: Boolean = defaultParameters.networkSendManuallyPumped,
                   private val threadPerNode: Boolean = defaultParameters.threadPerNode,
-                  servicePeerAllocationStrategy: InMemoryMessagingNetwork.ServicePeerAllocationStrategy = defaultParameters.servicePeerAllocationStrategy,
+                  servicePeerAllocationStrategy: InMemoryMessagingNetwork.ServicePeerAllocationStrategy =
+                  defaultParameters.servicePeerAllocationStrategy,
                   private val defaultFactory: Factory<*> = defaultParameters.defaultFactory,
                   private val initialiseSerialization: Boolean = defaultParameters.initialiseSerialization,
-                  private val cordappPackages: List<String> = defaultParameters.cordappPackages) : Closeable {
-    /** Helper constructor for creating a [MockNetwork] with custom parameters from Java. */
+                  val notaries: List<NotaryNode> = emptyList(),
+                  private val cordappPackages: List<String> = defaultParameters.cordappPackages) : Closeable {/** Helper constructor for creating a [MockNetwork] with custom parameters from Java. */
     constructor(parameters: MockNetworkParameters) : this(defaultParameters = parameters)
-
     var nextNodeId = 0
         private set
     private val filesystem = Jimfs.newFileSystem(unix())
@@ -135,22 +136,15 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
     // A unique identifier for this network to segregate databases with the same nodeID but different networks.
     private val networkId = random63BitValue()
     private val _nodes = mutableListOf<MockNode>()
+    private val _notaryNodes = mutableListOf<StartedNode<MockNode>>()
     /** A read only view of the current set of executing nodes. */
     val nodes: List<MockNode> get() = _nodes
-
-    init {
-        if (initialiseSerialization) initialiseTestSerialization()
-        filesystem.getPath("/nodes").createDirectory()
-    }
-
-    /** Allows customisation of how nodes are created. */
-    interface Factory<out N : MockNode> {
-        fun create(args: MockNodeArgs): N
-    }
-
-    object DefaultFactory : Factory<MockNode> {
-        override fun create(args: MockNodeArgs) = MockNode(args)
-    }
+    /** A read only view of the current set of executing notary nodes. */
+    val notaryNodes: List<StartedNode<MockNode>> get() = _notaryNodes
+    private val _notaryIdentities = mutableListOf<Party>()
+    private val _validatingNotaryIdentities = mutableListOf<Party>()
+    /** A read only view of notary identities for this [MockNetwork]. */
+    val notaryIdentities: List<Party> get() = _notaryIdentities
 
     /**
      * Because this executor is shared, we need to be careful about nodes shutting it down.
@@ -173,6 +167,52 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
                 return super.awaitTermination(timeout, unit)
             }
         }
+    }
+
+    init {
+        if (initialiseSerialization) initialiseTestSerialization()
+        filesystem.getPath("/nodes").createDirectory()
+        generateNotaryIdentities()
+        for (notary in notaries) { // Automatically start all the notaries.
+            createNotary(notary)
+        }
+    }
+
+    private fun generateNotaryIdentities() {
+        var offset = 0
+        notaries.mapIndexed { idx, notary ->
+            val notaryParty = when (notary) {
+                is NotaryNode.Single -> {
+                    val dir = baseDirectory(nextNodeId + offset).createDirectories()
+                    val party = ServiceIdentityGenerator.generateToDisk(dirs = listOf(dir), serviceName = notary.legalNotaryName, threshold = 1)
+                    offset ++
+                    party
+                }
+                is NotaryNode.Cluster -> {
+                    (Paths.get("config") / "currentView").deleteIfExists() // XXX: Make config object warn if this exists?
+                    val replicaIds = (0 until notary.clusterSize)
+                    val serviceId = notary.run {
+                        NotaryService.constructId(validating, raft, bft)
+                    }
+                    val party = ServiceIdentityGenerator.generateToDisk(
+                            replicaIds.map { baseDirectory(nextNodeId + offset + it) },
+                            notary.legalNotaryName, serviceId = serviceId)
+                    offset += notary.clusterSize
+                    party
+                }
+            }
+            _notaryIdentities.add(notaryParty)
+            if (notary.validating) _validatingNotaryIdentities.add(notaryParty)
+        }
+    }
+
+    /** Allows customisation of how nodes are created. */
+    interface Factory<out N : MockNode> {
+        fun create(args: MockNodeArgs): N
+    }
+
+    object DefaultFactory : Factory<MockNode> {
+        override fun create(args: MockNodeArgs) = MockNode(args)
     }
 
     open class MockNode(args: MockNodeArgs) : AbstractNode(
@@ -206,7 +246,7 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
                     !mockNet.threadPerNode,
                     id,
                     serverThread,
-                    getNotaryIdentity(),
+                    getNotaryIdentity(legalIdentity),
                     myLegalName,
                     database)
                     .start()
@@ -218,7 +258,7 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
         }
 
         override fun makeKeyManagementService(identityService: IdentityService): KeyManagementService {
-            return E2ETestKeyManagementService(identityService, partyKeys + (notaryIdentity?.let { setOf(it.second) } ?: emptySet()))
+            return E2ETestKeyManagementService(identityService, partyKeys)
         }
 
         override fun startMessagingService(rpcOps: RPCOps) {
@@ -226,7 +266,17 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
         }
 
         override fun makeNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal): NetworkMapService {
-            return InMemoryNetworkMapService(network, networkMapCache, 1)
+            return InMemoryNetworkMapService(network, networkMapCache, services.keyManagementService,
+                    services.myInfo.legalIdentities.first().owningKey, 1, networkParameters = readNetworkParameters())
+        }
+
+        // TODO remove that
+        override fun readNetworkParameters(): NetworkParameters {
+            return testParameters(mockNet.notaryIdentities, mockNet._validatingNotaryIdentities)
+        }
+
+        override fun readNetworkParametersIfPresent(): NetworkParameters? {
+            return testParameters(mockNet.notaryIdentities, mockNet._validatingNotaryIdentities)
         }
 
         // This is not thread safe, but node construction is done on a single thread, so that should always be fine
@@ -340,26 +390,39 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
         }
     }
 
-    @JvmOverloads
-    fun createNotaryNode(legalName: CordaX500Name = DUMMY_NOTARY.name, validating: Boolean = true): StartedNode<MockNode> {
-        return createNode(MockNodeParameters(legalName = legalName, configOverrides = {
-            doReturn(NotaryConfig(validating)).whenever(it).notary
-        }))
+    private fun createNotary(notary: NotaryNode){
+        when (notary) {
+            is NotaryNode.Single ->{
+                val notaryNode = createNode(MockNodeParameters(legalName = notary.legalNotaryName, configOverrides = {
+                    doReturn(NotaryConfig(notary.validating)).whenever(it).notary
+                }))
+                _notaryNodes.add(notaryNode)
+            }
+            is NotaryNode.Cluster -> createNotaryCluster(notary)
+        }
     }
 
-    fun <N : MockNode> createNotaryNode(parameters: MockNodeParameters = MockNodeParameters(legalName = DUMMY_NOTARY.name),
-                                        validating: Boolean = true,
-                                        nodeFactory: Factory<N>): StartedNode<N> {
-        return createNode(parameters.copy(configOverrides = {
-            doReturn(NotaryConfig(validating)).whenever(it).notary
-            parameters.configOverrides(it)
-        }), nodeFactory)
+    fun createNotaryCluster(notary: NotaryNode.Cluster) {
+        if (notary.bft) bftNotaryCluster(notary.clusterSize, notary.exposeRaces)
+        // TODO Implement Raft
+        else throw NotImplementedError("For now other notary clusters than BFT are not implemented in MockNetwork")
+    }
+
+    private fun bftNotaryCluster(clusterSize: Int, exposeRaces: Boolean = false) {
+        val replicaIds = (0 until clusterSize)
+        val clusterAddresses = replicaIds.map { NetworkHostAndPort("localhost", 11000 + it * 10) }
+        replicaIds.forEach { replicaId ->
+            val notaryNode = createNode(MockNodeParameters(configOverrides = {
+                                val notary = NotaryConfig(validating = false, bftSMaRt = BFTSMaRtConfiguration(replicaId, clusterAddresses, exposeRaces = exposeRaces))
+                doReturn(notary).whenever(it).notary
+            }))
+            _notaryNodes.add(notaryNode)
+        }
     }
 
     @JvmOverloads
-    fun createPartyNode(legalName: CordaX500Name? = null,
-                        notaryIdentity: Pair<ServiceInfo, KeyPair>? = null): StartedNode<MockNode> {
-        return createNode(MockNodeParameters(legalName = legalName, notaryIdentity = notaryIdentity))
+    fun createPartyNode(legalName: CordaX500Name? = null): StartedNode<MockNode> {
+        return createNode(MockNodeParameters(legalName = legalName))
     }
 
     @Suppress("unused") // This is used from the network visualiser tool.
@@ -408,9 +471,9 @@ class MockNetwork(defaultParameters: MockNetworkParameters = MockNetworkParamete
 }
 
 fun network(nodesCount: Int, action: MockNetwork.(nodes: List<StartedNode<MockNetwork.MockNode>>, notary: StartedNode<MockNetwork.MockNode>) -> Unit) {
-    MockNetwork().use {
+    MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true))).use {
         it.runNetwork()
-        val notary = it.createNotaryNode()
+        val notary = it.notaryNodes[0]
         val nodes = (1..nodesCount).map { _ -> it.createPartyNode() }
         action(it, nodes, notary)
     }

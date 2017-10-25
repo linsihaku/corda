@@ -139,8 +139,7 @@ class IRSSimulation(networkSendManuallyPumped: Boolean, runAsync: Boolean, laten
 
         node1.internals.registerInitiatedFlow(FixingFlow.Fixer::class.java)
         node2.internals.registerInitiatedFlow(FixingFlow.Fixer::class.java)
-
-        val notaryId = node1.rpcOps.notaryIdentities().first()
+        val notaryId = notary.info.legalIdentities[0]
 
         @InitiatingFlow
         class StartDealFlow(val otherParty: Party,

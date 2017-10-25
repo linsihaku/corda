@@ -12,6 +12,7 @@ import net.corda.finance.schemas.CashSchemaV1
 import net.corda.node.internal.StartedNode
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Assert
 import org.junit.Before
@@ -27,15 +28,14 @@ class CustomVaultQueryTest {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(
-                threadPerNode = true,
+        mockNet = MockNetwork(threadPerNode = true,
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
                 cordappPackages = listOf(
                         "net.corda.finance.contracts.asset",
                         CashSchemaV1::class.packageName,
                         "net.corda.docs"
                 )
         )
-        mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
         nodeA = mockNet.createPartyNode()
         nodeB = mockNet.createPartyNode()
         nodeA.internals.registerInitiatedFlow(TopupIssuerFlow.TopupIssuer::class.java)

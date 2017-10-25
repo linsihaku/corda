@@ -12,6 +12,7 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.nodeapi.User
 import net.corda.testing.driver.driver
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.Ignore
 import org.junit.Test
 import java.nio.file.Path
@@ -289,8 +290,7 @@ class FlowStackSnapshotTest {
 
     @Test
     fun `flowStackSnapshot object is serializable`() {
-        val mockNet = MockNetwork(threadPerNode = true)
-        mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        val mockNet = MockNetwork(threadPerNode = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
         val node = mockNet.createPartyNode()
         node.internals.registerInitiatedFlow(DummyFlow::class.java)
         node.services.startFlow(FlowStackSnapshotSerializationTestingFlow()).resultFuture.get()

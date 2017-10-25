@@ -12,6 +12,7 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.node.services.api.StartedNodeServices
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -32,9 +33,10 @@ class WorkflowTransactionBuildTutorialTest {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.docs"))
-        // While we don't use the notary, we need there to be one on the network
-        mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        mockNet = MockNetwork(threadPerNode = true,
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.docs")
+        )
         val aliceNode = mockNet.createPartyNode(ALICE_NAME)
         val bobNode = mockNet.createPartyNode(BOB_NAME)
         aliceNode.internals.registerInitiatedFlow(RecordCompletionFlow::class.java)

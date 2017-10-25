@@ -17,6 +17,7 @@ import net.corda.node.services.RPCUserService
 import net.corda.node.services.messaging.ArtemisMessagingServer
 import net.corda.node.services.messaging.RPCServer
 import net.corda.node.services.messaging.RPCServerConfiguration
+import net.corda.node.utilities.NotaryNode
 import net.corda.nodeapi.ArtemisTcpTransport
 import net.corda.nodeapi.ConnectionDirection
 import net.corda.nodeapi.RPCApi
@@ -230,6 +231,7 @@ fun <A> rpcDriver(
         initialiseSerialization: Boolean = true,
         startNodesInProcess: Boolean = false,
         extraCordappPackagesToScan: List<String> = emptyList(),
+        notaries: List<NotaryNode> = emptyList(),
         dsl: RPCDriverExposedDSLInterface.() -> A
 ) = genericDriver(
         driverDsl = RPCDriverDSL(
@@ -241,7 +243,8 @@ fun <A> rpcDriver(
                         useTestClock = useTestClock,
                         isDebug = isDebug,
                         startNodesInProcess = startNodesInProcess,
-                        extraCordappPackagesToScan = extraCordappPackagesToScan
+                        extraCordappPackagesToScan = extraCordappPackagesToScan,
+                        notaries = notaries
                 )
         ),
         coerce = { it },

@@ -19,6 +19,7 @@ import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNodeParameters
+import net.corda.node.utilities.NotaryNode
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
 import org.junit.Before
@@ -36,9 +37,11 @@ class ValidatingNotaryServiceTests {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(cordappPackages = listOf("net.corda.testing.contracts"))
-        val notaryNode = mockNet.createNotaryNode(legalName = DUMMY_NOTARY.name)
+        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.testing.contracts")
+        )
         val aliceNode = mockNet.createNode(MockNodeParameters(legalName = ALICE_NAME))
+        val notaryNode = mockNet.notaryNodes[0]
         mockNet.runNetwork() // Clear network map registration messages
         notaryServices = notaryNode.services
         aliceServices = aliceNode.services

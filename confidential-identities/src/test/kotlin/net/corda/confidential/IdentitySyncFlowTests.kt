@@ -16,6 +16,7 @@ import net.corda.finance.flows.CashIssueAndPaymentFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -29,7 +30,10 @@ class IdentitySyncFlowTests {
     @Before
     fun before() {
         // We run this in parallel threads to help catch any race conditions that may exist.
-        mockNet = MockNetwork(networkSendManuallyPumped = false, threadPerNode = true, cordappPackages = listOf("net.corda.finance.contracts.asset"))
+        mockNet = MockNetwork(networkSendManuallyPumped = false, threadPerNode = true,
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.finance.contracts.asset")
+        )
     }
 
     @After
@@ -40,12 +44,11 @@ class IdentitySyncFlowTests {
     @Test
     fun `sync confidential identities`() {
         // Set up values we'll need
-        val notaryNode = mockNet.createNotaryNode()
         val aliceNode = mockNet.createPartyNode(ALICE_NAME)
         val bobNode = mockNet.createPartyNode(BOB_NAME)
         val alice: Party = aliceNode.info.singleIdentity()
         val bob: Party = bobNode.info.singleIdentity()
-        val notary = notaryNode.services.getDefaultNotary()
+        val notary = aliceNode.services.getDefaultNotary()
         bobNode.internals.registerInitiatedFlow(Receive::class.java)
 
         // Alice issues then pays some cash to a new confidential identity that Bob doesn't know about
@@ -70,14 +73,13 @@ class IdentitySyncFlowTests {
     @Test
     fun `don't offer other's identities confidential identities`() {
         // Set up values we'll need
-        val notaryNode = mockNet.createNotaryNode()
         val aliceNode = mockNet.createPartyNode(ALICE_NAME)
         val bobNode = mockNet.createPartyNode(BOB_NAME)
         val charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
         val alice: Party = aliceNode.info.singleIdentity()
         val bob: Party = bobNode.info.singleIdentity()
         val charlie: Party = charlieNode.info.singleIdentity()
-        val notary = notaryNode.services.getDefaultNotary()
+        val notary = aliceNode.services.getDefaultNotary()
         bobNode.internals.registerInitiatedFlow(Receive::class.java)
 
         // Charlie issues then pays some cash to a new confidential identity

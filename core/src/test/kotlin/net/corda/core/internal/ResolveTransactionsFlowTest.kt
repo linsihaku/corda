@@ -8,10 +8,12 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.sequence
 import net.corda.node.internal.StartedNode
+import net.corda.node.services.transactions.ValidatingNotaryService
 import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.getDefaultNotary
 import net.corda.testing.node.MockNetwork
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -36,8 +38,10 @@ class ResolveTransactionsFlowTest {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(cordappPackages = listOf("net.corda.testing.contracts"))
-        notaryNode = mockNet.createNotaryNode()
+        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.testing.contracts")
+        )
+        notaryNode = mockNet.notaryNodes[0]
         megaCorpNode = mockNet.createPartyNode(MEGA_CORP.name)
         miniCorpNode = mockNet.createPartyNode(MINI_CORP.name)
         megaCorpNode.internals.registerInitiatedFlow(TestResponseFlow::class.java)

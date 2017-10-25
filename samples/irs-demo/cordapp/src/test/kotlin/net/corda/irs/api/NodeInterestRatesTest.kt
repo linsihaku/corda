@@ -24,6 +24,7 @@ import net.corda.testing.node.MockServices.Companion.makeTestDataSourcePropertie
 import net.corda.testing.node.MockServices.Companion.makeTestDatabaseProperties
 import net.corda.testing.node.MockServices.Companion.makeTestIdentityService
 import net.corda.testing.node.createMockCordaService
+import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -200,8 +201,10 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
 
     @Test
     fun `network tearoff`() {
-        val mockNet = MockNetwork(initialiseSerialization = false, cordappPackages = listOf("net.corda.finance.contracts", "net.corda.irs"))
-        val n1 = mockNet.createNotaryNode()
+        val mockNet = MockNetwork(initialiseSerialization = false,
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+                cordappPackages = listOf("net.corda.finance.contracts", "net.corda.irs"))
+        val aliceNode = mockNet.createPartyNode(ALICE.name)
         val oracleNode = mockNet.createNode().apply {
             internals.registerInitiatedFlow(NodeInterestRates.FixQueryHandler::class.java)
             internals.registerInitiatedFlow(NodeInterestRates.FixSignHandler::class.java)
@@ -214,7 +217,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
         val flow = FilteredRatesFlow(tx, oracleNode.info.chooseIdentity(), fixOf, BigDecimal("0.675"), BigDecimal("0.1"))
         LogHelper.setLevel("rates")
         mockNet.runNetwork()
-        val future = n1.services.startFlow(flow).resultFuture
+        val future = aliceNode.services.startFlow(flow).resultFuture
         mockNet.runNetwork()
         future.getOrThrow()
         // We should now have a valid fix of our tx from the oracle.

@@ -8,6 +8,7 @@ import net.corda.testing.DUMMY_BANK_B
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.PortAllocation
 import net.corda.testing.driver.driver
+import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 import java.util.concurrent.CompletableFuture.supplyAsync
 
@@ -16,7 +17,8 @@ class AttachmentDemoTest {
     @Test
     fun `attachment demo using a 10MB zip file`() {
         val numOfExpectedBytes = 10_000_000
-        driver(isDebug = true, portAllocation = PortAllocation.Incremental(20000)) {
+        driver(isDebug = true, portAllocation = PortAllocation.Incremental(20000),
+                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
             val demoUser = listOf(User("demo", "demo", setOf(startFlowPermission<AttachmentDemoFlow>())))
             val (nodeA, nodeB) = listOf(
                     startNode(providedName = DUMMY_BANK_A.name, rpcUsers = demoUser, maximumHeapSize = "1g"),

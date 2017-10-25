@@ -7,6 +7,7 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.messaging.DataFeed
+import net.corda.core.node.NetworkParameters
 import net.corda.core.node.NodeInfo
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.utilities.NetworkHostAndPort
@@ -60,6 +61,8 @@ interface NetworkMapCacheBase {
     val changed: Observable<NetworkMapCache.MapChange>
     /** Future to track completion of the NetworkMapService registration. */
     val nodeReady: CordaFuture<Void?>
+    /** Global network parameters **/
+    val networkParameters: NetworkParameters?
 
     /**
      * Atomically get the current party nodes and a stream of updates. Note that the Observable buffers updates until the
@@ -120,8 +123,7 @@ interface NetworkMapCacheBase {
     fun isNotary(party: Party): Boolean = party in notaryIdentities
 
     /** Checks whether a given party is an validating notary identity. */
-    // TODO This implementation will change after introducing of NetworkParameters.
-    fun isValidatingNotary(party: Party): Boolean = isNotary(party) && "validating" in party.name.commonName!!
+    fun isValidatingNotary(party: Party): Boolean
 
     /** Clear all network map data from local node cache. */
     fun clearNetworkMapCache()
