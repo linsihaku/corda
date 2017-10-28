@@ -10,9 +10,9 @@ import net.corda.finance.contracts.getCashBalances
 import net.corda.finance.flows.CashIssueFlow
 import net.corda.finance.schemas.CashSchemaV1
 import net.corda.node.internal.StartedNode
-import net.corda.testing.*
+import net.corda.testing.chooseIdentity
+import net.corda.testing.getDefaultNotary
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Assert
 import org.junit.Before
@@ -21,15 +21,14 @@ import java.util.*
 
 class CustomVaultQueryTest {
 
-    lateinit var mockNet: MockNetwork
-    lateinit var nodeA: StartedNode<MockNetwork.MockNode>
-    lateinit var nodeB: StartedNode<MockNetwork.MockNode>
-    lateinit var notary: Party
+    private lateinit var mockNet: MockNetwork
+    private lateinit var nodeA: StartedNode<MockNetwork.MockNode>
+    private lateinit var nodeB: StartedNode<MockNetwork.MockNode>
+    private lateinit var notary: Party
 
     @Before
     fun setup() {
         mockNet = MockNetwork(threadPerNode = true,
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
                 cordappPackages = listOf(
                         "net.corda.finance.contracts.asset",
                         CashSchemaV1::class.packageName,

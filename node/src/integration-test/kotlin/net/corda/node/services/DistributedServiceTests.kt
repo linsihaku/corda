@@ -3,6 +3,7 @@ package net.corda.node.services
 import net.corda.core.contracts.Amount
 import net.corda.core.identity.Party
 import net.corda.core.internal.bufferUntilSubscribed
+import net.corda.core.internal.uncheckedCast
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.StateMachineUpdate
 import net.corda.core.messaging.startFlow
@@ -12,57 +13,51 @@ import net.corda.finance.POUNDS
 import net.corda.finance.flows.CashIssueFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
-import net.corda.node.services.transactions.RaftValidatingNotaryService
-import net.corda.node.utilities.NotaryNode
 import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
+import net.corda.testing.node.ClusterSpec
 import net.corda.testing.node.DriverBasedTest
+import net.corda.testing.node.NotarySpec
 import org.junit.Test
 import rx.Observable
 import java.util.*
 import kotlin.test.assertEquals
 
 class DistributedServiceTests : DriverBasedTest() {
-    lateinit var alice: NodeHandle
-    lateinit var notaries: List<NodeHandle.OutOfProcess>
-    lateinit var aliceProxy: CordaRPCOps
-    lateinit var raftNotaryIdentity: Party
-    lateinit var notaryStateMachines: Observable<Pair<Party, StateMachineUpdate>>
-    val clusterName = DUMMY_NOTARY.name
-    val clusterSize = 3
+    private lateinit var alice: NodeHandle
+    private lateinit var notaryNodes: List<NodeHandle.OutOfProcess>
+    private lateinit var aliceProxy: CordaRPCOps
+    private lateinit var notaryIdentity: Party
+    private lateinit var notaryStateMachines: Observable<Pair<Party, StateMachineUpdate>>
+    private val clusterName = DUMMY_NOTARY.name
+    private val clusterSize = 3
+    private val testUser = User("test", "test", permissions = setOf(
+            startFlowPermission<CashIssueFlow>(),
+            startFlowPermission<CashPaymentFlow>())
+    )
 
-    override fun setup() = driver(extraCordappPackagesToScan = listOf("net.corda.finance.contracts"),
-            notaries = listOf(NotaryNode.Cluster(clusterName, clusterSize, validating = true, raft = true))) {
-        // Start Alice and 3 notaries in a RAFT cluster
-        val testUser = User("test", "test", permissions = setOf(
-                startFlowPermission<CashIssueFlow>(),
-                startFlowPermission<CashPaymentFlow>())
-        )
-        val aliceFuture = startNode(providedName = ALICE.name, rpcUsers = listOf(testUser))
-        val notariesFuture = startNotaryCluster(
-                clusterName,
-                rpcUsers = listOf(testUser),
-                clusterSize = clusterSize
-        )
-
+    // Start Alice and 3 notaries in a RAFT cluster
+    override fun setup() = driver(
+            extraCordappPackagesToScan = listOf("net.corda.finance.contracts"),
+            notarySpecs = listOf(NotarySpec(clusterName, rpcUsers = listOf(testUser), cluster = ClusterSpec.Raft(clusterSize = clusterSize))))
+    {
         fun connectRpc(node: NodeHandle): CordaRPCOps {
             val client = node.rpcClientToNode()
             return client.start("test", "test").proxy
         }
 
-        val (notaryIdentity, notaryNodes) = notariesFuture.get()
-        alice = aliceFuture.get()
+        alice = startNode(providedName = ALICE.name, rpcUsers = listOf(testUser)).getOrThrow()
+        notaryNodes = uncheckedCast(notaries[0].nodeHandles.getOrThrow())
+        notaryIdentity = notaries[0].identity
         aliceProxy = connectRpc(alice)
-        raftNotaryIdentity = notaryIdentity
-        notaries = notaryNodes.map { it as NodeHandle.OutOfProcess }
 
         assertEquals(notaries.size, clusterSize)
         // Check that each notary has different identity as a node.
-        assertEquals(notaries.size, notaries.map { it.nodeInfo.chooseIdentity() }.toSet().size)
+        assertEquals(notaries.size, notaryNodes.map { it.nodeInfo.chooseIdentity() }.toSet().size)
         // Connect to Alice and the notaries
-        val rpcClientsToNotaries = notaries.map(::connectRpc)
+        val rpcClientsToNotaries = notaryNodes.map(::connectRpc)
         notaryStateMachines = Observable.from(rpcClientsToNotaries.map { proxy ->
             proxy.stateMachinesFeed().updates.map { Pair(proxy.nodeInfo().chooseIdentity(), it) }
         }).flatMap { it.onErrorResumeNext(Observable.empty()) }.bufferUntilSubscribed()
@@ -110,7 +105,7 @@ class DistributedServiceTests : DriverBasedTest() {
         }
 
         // Now kill a notary
-        with(notaries[0].process) {
+        with(notaryNodes[0].process) {
             destroy()
             waitFor()
         }
@@ -135,7 +130,7 @@ class DistributedServiceTests : DriverBasedTest() {
     }
 
     private fun issueCash(amount: Amount<Currency>) {
-        aliceProxy.startFlow(::CashIssueFlow, amount, OpaqueBytes.of(0), raftNotaryIdentity).returnValue.getOrThrow()
+        aliceProxy.startFlow(::CashIssueFlow, amount, OpaqueBytes.of(0), notaryIdentity).returnValue.getOrThrow()
     }
 
     private fun paySelf(amount: Amount<Currency>) {

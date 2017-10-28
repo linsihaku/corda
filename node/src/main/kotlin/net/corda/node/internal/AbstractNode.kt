@@ -67,7 +67,6 @@ import org.slf4j.Logger
 import rx.Observable
 import java.io.IOException
 import java.lang.reflect.InvocationTargetException
-import java.nio.file.Files
 import java.security.KeyPair
 import java.security.KeyStoreException
 import java.security.PublicKey
@@ -90,14 +89,15 @@ import net.corda.core.crypto.generateKeyPair as cryptoGenerateKeyPair
  * Marked as SingletonSerializeAsToken to prevent the invisible reference to AbstractNode in the ServiceHub accidentally
  * sweeping up the Node into the Kryo checkpoint serialization via any flows holding a reference to ServiceHub.
  */
-// TODO: Where this node is the initial network map service, currently no networkMapService is provided.
+// TODO Log warning if this node is a notary but not one of the ones specified in the network parameters, both for core and custom
+
 // In theory the NodeInfo for the node should be passed in, instead, however currently this is constructed by the
 // AbstractNode. It should be possible to generate the NodeInfo outside of AbstractNode, so it can be passed in.
 abstract class AbstractNode(config: NodeConfiguration,
                             val platformClock: Clock,
                             protected val versionInfo: VersionInfo,
                             protected val cordappLoader: CordappLoader,
-                            @VisibleForTesting val busyNodeLatch: ReusableLatch = ReusableLatch()) : SingletonSerializeAsToken() {
+                            @VisibleForTesting private val busyNodeLatch: ReusableLatch = ReusableLatch()) : SingletonSerializeAsToken() {
     open val configuration = config.apply {
         require(minimumPlatformVersion <= versionInfo.platformVersion) {
             "minimumPlatformVersion cannot be greater than the node's own version"
@@ -132,6 +132,7 @@ abstract class AbstractNode(config: NodeConfiguration,
     // low-performance prototyping period.
     protected abstract val serverThread: AffinityExecutor
 
+    protected lateinit var networkParameters: NetworkParameters
     private val cordappServices = MutableClassToInstanceMap.create<SerializeAsToken>()
     private val flowFactories = ConcurrentHashMap<Class<out FlowLogic<*>>, InitiatedFlowFactory<*>>()
     protected val partyKeys = mutableSetOf<KeyPair>()
@@ -201,8 +202,9 @@ abstract class AbstractNode(config: NodeConfiguration,
 
     open fun start(): StartedNode<AbstractNode> {
         check(started == null) { "Node has already been started" }
-        initCertificate()
         log.info("Node starting up ...")
+        initCertificate()
+        readNetworkParameters()
         val schemaService = makeSchemaService()
         // Do all of this in a database transaction so anything that might need a connection has one.
         val startedImpl = initialiseDatabasePersistence(schemaService) {
@@ -507,9 +509,10 @@ abstract class AbstractNode(config: NodeConfiguration,
      * Obtain the node's notary identity if it's configured to be one. If part of a distributed notary then this will be
      * the distributed identity shared across all the nodes of the cluster.
      */
-    protected fun getNotaryIdentity(legalIdentity: PartyAndCertificate): PartyAndCertificate? = configuration.notary?.let {
-        if (it.bftSMaRt == null && it.raft == null) legalIdentity
-        else obtainIdentity(it)
+    protected fun getNotaryIdentity(legalIdentity: PartyAndCertificate): PartyAndCertificate? {
+        return configuration.notary?.let {
+            if (it.bftSMaRt == null && it.raft == null) legalIdentity else obtainIdentity(it)
+        }
     }
 
     @VisibleForTesting
@@ -600,7 +603,7 @@ abstract class AbstractNode(config: NodeConfiguration,
      */
     protected open fun registerWithNetworkMap(): CordaFuture<Unit> {
         val address: SingleMessageRecipient = networkMapAddress ?:
-                network.getAddressOfParty(PartyInfo.SingleNode(services.myInfo.legalIdentitiesAndCerts.first().party, info.addresses)) as SingleMessageRecipient
+                network.getAddressOfParty(PartyInfo.SingleNode(services.myInfo.legalIdentitiesAndCerts[0].party, info.addresses)) as SingleMessageRecipient
         // Register for updates, even if we're the one running the network map.
         return sendNetworkMapRegistration(address).flatMap { (error) ->
             check(error == null) { "Unable to register with the network map service: $error" }
@@ -614,7 +617,7 @@ abstract class AbstractNode(config: NodeConfiguration,
         val instant = platformClock.instant()
         val expires = instant + NetworkMapService.DEFAULT_EXPIRATION_PERIOD
         val reg = NodeRegistration(info, info.serial, ADD, expires)
-        val request = RegistrationRequest(reg.toWire(services.keyManagementService, info.legalIdentitiesAndCerts.first().owningKey), network.myAddress)
+        val request = RegistrationRequest(reg.toWire(services.keyManagementService, info.legalIdentitiesAndCerts[0].owningKey), network.myAddress)
         return network.sendRequest(NetworkMapService.REGISTER_TOPIC, request, networkMapAddress)
     }
 
@@ -636,31 +639,10 @@ abstract class AbstractNode(config: NodeConfiguration,
         return PersistentKeyManagementService(identityService, partyKeys)
     }
 
-    abstract protected fun readNetworkParameters(): NetworkParameters
-
-    protected open fun readNetworkParametersIfPresent(): NetworkParameters? {
-        val paramsDirectory = configuration.baseDirectory / "network_parameters"
-        return if (paramsDirectory.exists()) {
-            var latestEpoch = 0
-            var latestParams: NetworkParameters? = null
-            for (paramFile in Files.list(paramsDirectory)) {
-                // We assume that we default to the highest epoch.
-                val contents = paramFile.readAll().deserialize<SignedData<NetworkParameters>>().verified()
-                val epoch = contents.epoch
-                if (latestEpoch < epoch) {
-                    latestEpoch = epoch
-                    latestParams = contents
-                }
-            }
-            log.info("Loaded the latest known version of network parameters $latestParams")
-            latestParams?.let { check(configuration.minimumPlatformVersion <= it.minimumPlatformVersion) {
-                "Node's minimumPlatformVersion is lower than network platform version"
-            } }
-            latestParams
-        } else {
-            log.info("Starting node without network parameters will accept ones form network map")
-            null
-        }
+    private fun readNetworkParameters() {
+        val file = configuration.baseDirectory / "network-parameters"
+        networkParameters = file.readAll().deserialize<SignedData<NetworkParameters>>().verified()
+        check(configuration.minimumPlatformVersion >= networkParameters.minimumPlatformVersion)
     }
 
     abstract protected fun makeNetworkMapService(network: MessagingService, networkMapCache: NetworkMapCacheInternal): NetworkMapService
@@ -729,7 +711,7 @@ abstract class AbstractNode(config: NodeConfiguration,
         val keyStore = KeyStoreWrapper(configuration.nodeKeystore, configuration.keyStorePassword)
 
         val (id, singleName) = if (notaryConfig == null || (notaryConfig.bftSMaRt == null && notaryConfig.raft == null)) {
-            // Node's main identity or if it's single notary - notary identity.
+            // Node's main identity or if it's single notary
             Pair("identity", myLegalName)
         } else {
             val notaryId = notaryConfig.run {
@@ -795,7 +777,9 @@ abstract class AbstractNode(config: NodeConfiguration,
         override val stateMachineRecordedTransactionMapping = DBTransactionMappingStorage()
         override val auditService = DummyAuditService()
         override val transactionVerifierService by lazy { makeTransactionVerifierService() }
-        override val networkMapCache by lazy { NetworkMapCacheImpl(PersistentNetworkMapCache(this@AbstractNode.database, this@AbstractNode.configuration, readNetworkParametersIfPresent()), identityService) }
+        override val networkMapCache by lazy {
+            NetworkMapCacheImpl(PersistentNetworkMapCache(this@AbstractNode.database, this@AbstractNode.configuration, networkParameters), identityService)
+        }
         override val vaultService by lazy { makeVaultService(keyManagementService, stateLoader) }
         override val contractUpgradeService by lazy { ContractUpgradeServiceImpl() }
 

@@ -6,17 +6,13 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.testing.BOC
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
-import net.corda.node.utilities.NotaryNode
-import net.corda.testing.notary
 import org.junit.Test
 import kotlin.test.assertTrue
 
 class BankOfCordaHttpAPITest {
     @Test
     fun `issuer flow via Http`() {
-        driver(extraCordappPackagesToScan = listOf("net.corda.finance"),
-                isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
-            val notaryName = startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
+        driver(extraCordappPackagesToScan = listOf("net.corda.finance"), isDebug = true) {
             val bigCorpNodeFuture = startNode(providedName = BIGCORP_LEGAL_NAME)
             val nodeBankOfCordaFuture = startNode(providedName = BOC.name)
             val (nodeBankOfCorda) = listOf(nodeBankOfCordaFuture, bigCorpNodeFuture).map { it.getOrThrow() }

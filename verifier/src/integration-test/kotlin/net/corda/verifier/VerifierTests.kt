@@ -12,13 +12,15 @@ import net.corda.finance.DOLLARS
 import net.corda.finance.flows.CashIssueFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.node.services.config.VerifierType
-import net.corda.node.utilities.NotaryNode
-import net.corda.testing.*
+import net.corda.testing.ALICE
+import net.corda.testing.ALICE_NAME
+import net.corda.testing.DUMMY_NOTARY
+import net.corda.testing.node.NotarySpec
 import org.junit.Test
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.assertTrue
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class VerifierTests {
     private fun generateTransactions(number: Int): List<LedgerTransaction> {
@@ -128,11 +130,9 @@ class VerifierTests {
     @Test
     fun `single verifier works with a node`() {
         verifierDriver(extraCordappPackagesToScan = listOf("net.corda.finance.contracts"),
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true))) {
-            val aliceFuture = startNode(providedName = ALICE.name)
-            val notaryFuture = startNotaryNode(DUMMY_NOTARY.name, verifierType = VerifierType.OutOfProcess)
-            val aliceNode = aliceFuture.get()
-            val notaryNode = notaryFuture.get()
+                notarySpecs = listOf(NotarySpec(DUMMY_NOTARY.name, verifierType = VerifierType.OutOfProcess))) {
+            val aliceNode = startNode(providedName = ALICE.name).getOrThrow()
+            val notaryNode = notaries[0].nodeHandles.getOrThrow()[0]
             val alice = aliceNode.rpc.wellKnownPartyFromX500Name(ALICE_NAME)!!
             val notary = notaryNode.rpc.notaryPartyFromX500Name(DUMMY_NOTARY.name)!!
             startVerifier(notaryNode)

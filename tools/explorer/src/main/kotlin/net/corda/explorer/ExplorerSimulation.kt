@@ -24,15 +24,13 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.nodeapi.User
 import net.corda.testing.ALICE
 import net.corda.testing.BOB
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.PortAllocation
 import net.corda.testing.driver.driver
-import net.corda.node.utilities.NotaryNode
 import java.time.Instant
 import java.util.*
 
-class ExplorerSimulation(val options: OptionSet) {
+class ExplorerSimulation(private val options: OptionSet) {
     private val user = User("user1", "test", permissions = setOf(
             startFlowPermission<CashPaymentFlow>(),
             startFlowPermission<CashConfigDataFlow>()
@@ -44,7 +42,6 @@ class ExplorerSimulation(val options: OptionSet) {
             startFlowPermission<CashConfigDataFlow>())
     )
 
-    private lateinit var notaryNode: NodeHandle
     private lateinit var aliceNode: NodeHandle
     private lateinit var bobNode: NodeHandle
     private lateinit var issuerNodeGBP: NodeHandle
@@ -66,33 +63,25 @@ class ExplorerSimulation(val options: OptionSet) {
 
     private fun startDemoNodes() {
         val portAllocation = PortAllocation.Incremental(20000)
-        driver(portAllocation = portAllocation, extraCordappPackagesToScan = listOf("net.corda.finance"),
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
+        driver(portAllocation = portAllocation, extraCordappPackagesToScan = listOf("net.corda.finance")) {
             // TODO : Supported flow should be exposed somehow from the node instead of set of ServiceInfo.
-            val notary = startNotaryNode(DUMMY_NOTARY.name, customOverrides = mapOf("nearestCity" to "Zurich"), validating = false)
-            val alice = startNode(providedName = ALICE.name, rpcUsers = arrayListOf(user),
-                    customOverrides = mapOf("nearestCity" to "Milan"))
-            val bob = startNode(providedName = BOB.name, rpcUsers = arrayListOf(user),
-                    customOverrides = mapOf("nearestCity" to "Madrid"))
+            val alice = startNode(providedName = ALICE.name, rpcUsers = listOf(user))
+            val bob = startNode(providedName = BOB.name, rpcUsers = listOf(user))
             val ukBankName = CordaX500Name(organisation = "UK Bank Plc", locality = "London", country = "GB")
             val usaBankName = CordaX500Name(organisation = "USA Bank Corp", locality = "New York", country = "US")
-            val issuerGBP = startNode(providedName = ukBankName, rpcUsers = arrayListOf(manager),
-                    customOverrides = mapOf(
-                            "issuableCurrencies" to listOf("GBP"),
-                            "nearestCity" to "London"))
-            val issuerUSD = startNode(providedName = usaBankName, rpcUsers = arrayListOf(manager),
-                    customOverrides = mapOf(
-                            "issuableCurrencies" to listOf("USD"),
-                            "nearestCity" to "New York"))
+            val issuerGBP = startNode(providedName = ukBankName, rpcUsers = listOf(manager),
+                    customOverrides = mapOf("issuableCurrencies" to listOf("GBP")))
+            val issuerUSD = startNode(providedName = usaBankName, rpcUsers = listOf(manager),
+                    customOverrides = mapOf("issuableCurrencies" to listOf("USD")))
 
-            notaryNode = notary.get()
+            val notaryNode = notaries[0].nodeHandles.get()[0]
             aliceNode = alice.get()
             bobNode = bob.get()
             issuerNodeGBP = issuerGBP.get()
             issuerNodeUSD = issuerUSD.get()
 
-            arrayOf(notaryNode, aliceNode, bobNode, issuerNodeGBP, issuerNodeUSD).forEach {
-                println("${it.nodeInfo.legalIdentities.first()} started on ${it.configuration.rpcAddress}")
+            listOf(notaryNode, aliceNode, bobNode, issuerNodeGBP, issuerNodeUSD).forEach {
+                println("${it.nodeInfo.legalIdentities[0]} started on ${it.configuration.rpcAddress}")
             }
 
             when {

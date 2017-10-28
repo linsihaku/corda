@@ -3,11 +3,9 @@ package net.corda.node.services.network
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.testing.ALICE
 import net.corda.testing.BOB
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.chooseIdentity
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNodeParameters
-import net.corda.node.utilities.NotaryNode
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
 import org.junit.Test
@@ -15,7 +13,7 @@ import java.math.BigInteger
 import kotlin.test.assertEquals
 
 class NetworkMapCacheTest {
-    val mockNet: MockNetwork = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
+    val mockNet: MockNetwork = MockNetwork()
 
     @After
     fun teardown() {

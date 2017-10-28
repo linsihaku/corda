@@ -24,7 +24,6 @@ import net.corda.testing.node.MockServices.Companion.makeTestDataSourcePropertie
 import net.corda.testing.node.MockServices.Companion.makeTestDatabaseProperties
 import net.corda.testing.node.MockServices.Companion.makeTestIdentityService
 import net.corda.testing.node.createMockCordaService
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -201,9 +200,7 @@ class NodeInterestRatesTest : TestDependencyInjectionBase() {
 
     @Test
     fun `network tearoff`() {
-        val mockNet = MockNetwork(initialiseSerialization = false,
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
-                cordappPackages = listOf("net.corda.finance.contracts", "net.corda.irs"))
+        val mockNet = MockNetwork(initialiseSerialization = false, cordappPackages = listOf("net.corda.finance.contracts", "net.corda.irs"))
         val aliceNode = mockNet.createPartyNode(ALICE.name)
         val oracleNode = mockNet.createNode().apply {
             internals.registerInitiatedFlow(NodeInterestRates.FixQueryHandler::class.java)

@@ -9,9 +9,7 @@ import net.corda.finance.utils.CityDatabase
 import net.corda.irs.api.NodeInterestRates
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.statemachine.StateMachineManager
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.DUMMY_REGULATOR
-import net.corda.node.utilities.NotaryNode
 import net.corda.testing.node.*
 import net.corda.testing.node.MockNetwork.MockNode
 import net.corda.testing.node.MockServices.Companion.makeTestDataSourceProperties
@@ -73,7 +71,6 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
     val mockNet = MockNetwork(
             networkSendManuallyPumped = networkSendManuallyPumped,
             threadPerNode = runAsync,
-            notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
             cordappPackages = listOf("net.corda.irs.contract", "net.corda.finance.contract", "net.corda.irs"))
     val notary = mockNet.notaryNodes[0]
     // TODO: Regulatory nodes don't actually exist properly, this is a last minute demo request.

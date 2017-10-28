@@ -9,7 +9,6 @@ import net.corda.finance.issuedBy
 import net.corda.node.services.api.StartedNodeServices
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -26,9 +25,7 @@ class FinalityFlowTests {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
-                cordappPackages = listOf("net.corda.finance.contracts.asset")
-        )
+        mockNet = MockNetwork(cordappPackages = listOf("net.corda.finance.contracts.asset"))
         val aliceNode = mockNet.createPartyNode(ALICE_NAME)
         val bobNode = mockNet.createPartyNode(BOB_NAME)
         mockNet.runNetwork()

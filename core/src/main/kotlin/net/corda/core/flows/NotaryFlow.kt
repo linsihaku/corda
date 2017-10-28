@@ -49,9 +49,7 @@ class NotaryFlow {
             progressTracker.currentStep = REQUESTING
 
             val notaryParty = stx.notary ?: throw IllegalStateException("Transaction does not specify a Notary")
-            check(notaryParty in serviceHub.networkMapCache.notaryIdentities) {
-                "Notary party not in network parameters notary list"
-            }
+            check(serviceHub.networkMapCache.isNotary(notaryParty)) { "$notaryParty is not a notary on the network" }
             check(stx.inputs.all { stateRef -> serviceHub.loadState(stateRef).notary == notaryParty }) {
                 "Input states must have the same Notary"
             }
@@ -118,6 +116,7 @@ class NotaryFlow {
 
         @Suspendable
         override fun call(): Void? {
+            check(serviceHub.networkMapCache.isNotary(ourIdentity)) { "$ourIdentity is not a notary on the network" }
             val (id, inputs, timeWindow, notary) = receiveAndVerifyTx()
             checkNotary(notary)
             service.validateTimeWindow(timeWindow)
@@ -136,9 +135,7 @@ class NotaryFlow {
         // Check if transaction is intended to be signed by this notary.
         @Suspendable
         protected fun checkNotary(notary: Party?) {
-            // TODO This check implies that it's OK to use the node's main identity. Shouldn't it be just limited to the
-            // notary identities?
-            if (notary !in serviceHub.myInfo.legalIdentities) {
+            if (notary == ourIdentity) {
                 throw NotaryException(NotaryError.WrongNotary)
             }
         }

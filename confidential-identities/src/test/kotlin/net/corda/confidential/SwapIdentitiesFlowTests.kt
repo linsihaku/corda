@@ -6,19 +6,17 @@ import net.corda.core.identity.Party
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.*
 
 class SwapIdentitiesFlowTests {
-    lateinit var mockNet: MockNetwork
+    private lateinit var mockNet: MockNetwork
 
     @Before
     fun setup() {
         // We run this in parallel threads to help catch any race conditions that may exist.
-        mockNet = MockNetwork(networkSendManuallyPumped = false, threadPerNode = true,
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
+        mockNet = MockNetwork(networkSendManuallyPumped = false, threadPerNode = true)
     }
 
     @Test

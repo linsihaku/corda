@@ -18,16 +18,13 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.getOrThrow
-import net.corda.node.services.AttachmentLoadingTests
 import net.corda.node.services.FlowPermissions
 import net.corda.nodeapi.User
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.chooseIdentity
 import net.corda.testing.driver.DriverDSLExposedInterface
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
-import org.junit.Assume
-import net.corda.node.utilities.NotaryNode
+import org.junit.Assume.assumeFalse
 import org.junit.Test
 import java.lang.management.ManagementFactory
 import javax.persistence.Column
@@ -37,19 +34,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class NodeStatePersistenceTests {
-
     @Test
     fun `persistent state survives node restart`() {
         // Temporary disable this test when executed on Windows. It is known to be sporadically failing.
         // More investigation is needed to establish why.
-        Assume.assumeFalse(System.getProperty("os.name").toLowerCase().startsWith("win"))
+        assumeFalse(System.getProperty("os.name").toLowerCase().startsWith("win"))
 
         val user = User("mark", "dadada", setOf(FlowPermissions.startFlowPermission<SendMessageFlow>()))
         val message = Message("Hello world!")
-        driver(isDebug = true, startNodesInProcess = isQuasarAgentSpecified(),
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, false))) {
+        driver(isDebug = true, startNodesInProcess = isQuasarAgentSpecified()) {
             val (nodeName, notaryNodeHandle) = {
-                val notaryNodeHandle = startNotaryNode(DUMMY_NOTARY.name, validating = false).getOrThrow()
+                val notaryNodeHandle = notaries[0].nodeHandles.getOrThrow()[0]
                 val nodeHandle = startNode(rpcUsers = listOf(user)).getOrThrow()
                 ensureAcquainted(notaryNodeHandle, nodeHandle)
                 val nodeName = nodeHandle.nodeInfo.chooseIdentity().name

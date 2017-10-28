@@ -12,18 +12,17 @@ import net.corda.core.internal.concurrent.transpose
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.getOrThrow
 import net.corda.node.internal.StartedNode
-import net.corda.node.services.transactions.RaftValidatingNotaryService
 import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.node.NodeBasedTest
-import net.corda.node.utilities.NotaryNode
+import net.corda.testing.node.NotaryParameters
 import org.junit.Test
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class RaftNotaryServiceTests : NodeBasedTest(listOf("net.corda.testing.contracts"),
-        notaries = listOf(NotaryNode.Cluster(notaryName, clusterSize = 3, validating = true, raft = true))) {
+        notaries = listOf(NotaryParameters.Cluster(notaryName, isValidating = true, clusterSize = 3, raft = true))) {
     companion object {
         private val notaryName = CordaX500Name("RAFT Notary Service", "London", "GB")
     }

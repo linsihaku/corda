@@ -7,6 +7,7 @@ import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.UnexpectedFlowEndException
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
+import net.corda.core.internal.concurrent.map
 import net.corda.core.internal.concurrent.transpose
 import net.corda.core.internal.createDirectories
 import net.corda.core.internal.div
@@ -28,7 +29,6 @@ import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
 import net.corda.testing.eventually
 import net.corda.testing.node.MockServices
-import net.corda.node.utilities.NotaryNode
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -52,8 +52,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
 
         val bankAName = CordaX500Name("BankA", "Zurich", "CH")
         val bankBName = CordaX500Name("BankB", "Zurich", "CH")
-        val notaryName = CordaX500Name("Notary", "Zurich", "CH")
-        val flowInitiatorClass =
+        val flowInitiatorClass: Class<out FlowLogic<*>> =
                 Class.forName("net.corda.finance.contracts.isolated.IsolatedDummyFlow\$Initiator", true, URLClassLoader(arrayOf(isolatedJAR)))
                         .asSubclass(FlowLogic::class.java)
 
@@ -62,7 +61,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
             val nodes = listOf(
                     startNode(providedName = bankAName, rpcUsers = listOf(adminUser)),
                     startNode(providedName = bankBName, rpcUsers = listOf(adminUser)),
-                    startNotaryNode(providedName = notaryName, rpcUsers = listOf(adminUser), validating = false)
+                    notaries[0].nodeHandles.map { it[0] }
             ).transpose().getOrThrow()   // Wait for all nodes to start up.
             nodes.forEach { it.rpc.waitUntilNetworkReady().getOrThrow() }
             return nodes
@@ -116,7 +115,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
 
     @Test
     fun `test that attachments retrieved over the network are not used for code`() {
-        driver(initialiseSerialization = false, notaries = listOf(NotaryNode.Single(notaryName, false))) {
+        driver(initialiseSerialization = false) {
             installIsolatedCordappTo(bankAName)
             val (bankA, bankB, _) = createTwoNodesAndNotary()
             eventuallyPassingTest {
@@ -129,7 +128,7 @@ class AttachmentLoadingTests : TestDependencyInjectionBase() {
 
     @Test
     fun `tests that if the attachment is loaded on both sides already that a flow can run`() {
-        driver(initialiseSerialization = false, notaries = listOf(NotaryNode.Single(notaryName, false))) {
+        driver(initialiseSerialization = false) {
             installIsolatedCordappTo(bankAName)
             installIsolatedCordappTo(bankBName)
             val (bankA, bankB, _) = createTwoNodesAndNotary()

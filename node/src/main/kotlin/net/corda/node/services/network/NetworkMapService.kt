@@ -1,12 +1,7 @@
 package net.corda.node.services.network
 
 import net.corda.core.CordaException
-import net.corda.core.crypto.DigitalSignature
-import net.corda.core.crypto.SecureHash
-import net.corda.core.crypto.SignedData
-import net.corda.core.crypto.isFulfilledBy
-import net.corda.core.crypto.random63BitValue
-import net.corda.core.identity.Party
+import net.corda.core.crypto.*
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.ThreadBox
 import net.corda.core.internal.VisibleForTesting
@@ -35,7 +30,6 @@ import net.corda.node.services.network.NetworkMapService.Companion.PUSH_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.QUERY_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_TOPIC
 import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_TOPIC
-import net.corda.node.services.network.NetworkMapService.Companion.PARAMETERS_TOPIC
 import net.corda.node.utilities.AddOrRemove
 import net.corda.node.utilities.AddOrRemove.ADD
 import net.corda.node.utilities.AddOrRemove.REMOVE
@@ -76,8 +70,6 @@ interface NetworkMapService {
         const val PUSH_TOPIC = "platform.network_map.push"
         // Base topic for messages acknowledging pushed updates
         const val PUSH_ACK_TOPIC = "platform.network_map.push_ack"
-        // Fetch network parameters topic.
-        val PARAMETERS_TOPIC = "platform.network_map.parameters"
     }
 
     data class FetchMapRequest(val subscribe: Boolean,
@@ -87,12 +79,6 @@ interface NetworkMapService {
 
     @CordaSerializable
     data class FetchMapResponse(val networkMap: NetworkMap, val nodes: List<NodeRegistration>?, val version: Int)
-
-    data class FetchParametersRequest(override val replyTo: SingleMessageRecipient,
-                                      override val sessionID: Long = random63BitValue()) : ServiceRequestMessage
-
-    @CordaSerializable
-    data class FetchParametersResponse(val signedParameters: SignedData<NetworkParameters>)
 
     data class QueryIdentityRequest(val identity: PartyAndCertificate,
                                     override val replyTo: SingleMessageRecipient,
@@ -185,7 +171,6 @@ abstract class AbstractNetworkMapService(network: MessagingService,
         handlers += addMessageHandler(QUERY_TOPIC) { req: QueryIdentityRequest -> processQueryRequest(req) }
         handlers += addMessageHandler(REGISTER_TOPIC) { req: RegistrationRequest -> processRegistrationRequest(req) }
         handlers += addMessageHandler(SUBSCRIPTION_TOPIC) { req: SubscribeRequest -> processSubscriptionRequest(req) }
-        handlers += addMessageHandler(PARAMETERS_TOPIC) { req: FetchParametersRequest -> processFetchParametersRequest()}
         handlers += network.addMessageHandler(PUSH_ACK_TOPIC) { message, _ ->
             val req = message.data.deserialize<UpdateAcknowledge>()
             processAcknowledge(req)
@@ -306,13 +291,6 @@ abstract class AbstractNetworkMapService(network: MessagingService,
         }
 
         return RegistrationResponse(null)
-    }
-
-    private fun processFetchParametersRequest(): FetchParametersResponse {
-        logger.info("Net map received fetch parameters")
-        val serializedParams = networkParameters.serialize()
-        val signedParams = SignedData(serializedParams, keyManagementService.sign(serializedParams.bytes, key))
-        return FetchParametersResponse(signedParams)
     }
 
     private fun notifySubscribers(wireReg: WireNodeRegistration, newMapVersion: Int) {

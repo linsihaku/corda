@@ -15,8 +15,6 @@ import net.corda.core.utilities.unwrap
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.messaging.Message
 import net.corda.node.services.statemachine.SessionData
-import net.corda.node.utilities.NotaryNode
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.node.InMemoryMessagingNetwork
 import net.corda.testing.node.MessagingServiceSpy
 import net.corda.testing.node.MockNetwork
@@ -66,7 +64,7 @@ class TutorialMockNetwork {
 
     @Before
     fun setUp() {
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
+        mockNet = MockNetwork()
         nodeA = mockNet.createPartyNode()
         nodeB = mockNet.createPartyNode()
 

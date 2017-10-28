@@ -11,7 +11,6 @@ import net.corda.core.transactions.LedgerTransaction
 import net.corda.core.utilities.NetworkHostAndPort
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.config.configureDevKeyAndTrustStores
-import net.corda.node.utilities.NotaryNode
 import net.corda.nodeapi.ArtemisMessagingComponent.Companion.NODE_USER
 import net.corda.nodeapi.ArtemisTcpTransport
 import net.corda.nodeapi.ConnectionDirection
@@ -19,6 +18,7 @@ import net.corda.nodeapi.VerifierApi
 import net.corda.nodeapi.config.NodeSSLConfiguration
 import net.corda.nodeapi.config.SSLConfiguration
 import net.corda.testing.driver.*
+import net.corda.testing.node.NotarySpec
 import org.apache.activemq.artemis.api.core.SimpleString
 import org.apache.activemq.artemis.api.core.client.ActiveMQClient
 import org.apache.activemq.artemis.api.core.client.ClientProducer
@@ -77,7 +77,7 @@ fun <A> verifierDriver(
         useTestClock: Boolean = false,
         startNodesInProcess: Boolean = false,
         extraCordappPackagesToScan: List<String> = emptyList(),
-        notaries: List<NotaryNode> = emptyList(),
+        notarySpecs: List<NotarySpec> = emptyList(),
         dsl: VerifierExposedDSLInterface.() -> A
 ) = genericDriver(
         driverDsl = VerifierDriverDSL(
@@ -90,7 +90,7 @@ fun <A> verifierDriver(
                         isDebug = isDebug,
                         startNodesInProcess = startNodesInProcess,
                         extraCordappPackagesToScan = extraCordappPackagesToScan,
-                        notaries = notaries
+                        notarySpecs = notarySpecs
                 )
         ),
         coerce = { it },

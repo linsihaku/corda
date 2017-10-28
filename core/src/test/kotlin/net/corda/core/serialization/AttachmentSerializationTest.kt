@@ -19,8 +19,6 @@ import net.corda.testing.chooseIdentity
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNodeArgs
 import net.corda.testing.node.MockNodeParameters
-import net.corda.testing.DUMMY_NOTARY
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -68,7 +66,7 @@ class AttachmentSerializationTest {
 
     @Before
     fun setUp() {
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
+        mockNet = MockNetwork()
         server = mockNet.createNode()
         client = mockNet.createNode()
         client.internals.disableDBCloseOnStop() // Otherwise the in-memory database may disappear (taking the checkpoint with it) while we reboot the client.

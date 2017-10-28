@@ -16,7 +16,7 @@ import net.corda.node.internal.StartedNode
 import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
+import net.corda.testing.node.MockNetwork.NotarySpec
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.junit.After
 import org.junit.Before
@@ -27,18 +27,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class NotaryChangeTests {
-    lateinit var mockNet: MockNetwork
-    lateinit var oldNotaryNode: StartedNode<MockNetwork.MockNode>
-    lateinit var clientNodeA: StartedNode<MockNetwork.MockNode>
-    lateinit var clientNodeB: StartedNode<MockNetwork.MockNode>
-    lateinit var newNotaryParty: Party
-    lateinit var oldNotaryParty: Party
+    private lateinit var mockNet: MockNetwork
+    private lateinit var oldNotaryNode: StartedNode<MockNetwork.MockNode>
+    private lateinit var clientNodeA: StartedNode<MockNetwork.MockNode>
+    private lateinit var clientNodeB: StartedNode<MockNetwork.MockNode>
+    private lateinit var newNotaryParty: Party
+    private lateinit var oldNotaryParty: Party
 
     @Before
     fun setUp() {
         val oldNotaryName = DUMMY_REGULATOR.name
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true),
-                NotaryNode.Single(oldNotaryName, true)),
+        mockNet = MockNetwork(notarySpecs = listOf(NotarySpec(DUMMY_NOTARY.name), NotarySpec(oldNotaryName)),
                 cordappPackages = listOf("net.corda.testing.contracts")
         )
         clientNodeA = mockNet.createNode()

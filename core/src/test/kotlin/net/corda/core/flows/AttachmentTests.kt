@@ -10,11 +10,13 @@ import net.corda.core.internal.FetchDataFlow
 import net.corda.core.utilities.getOrThrow
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.persistence.NodeAttachmentService
-import net.corda.node.utilities.NotaryNode
-import net.corda.testing.*
+import net.corda.testing.ALICE
+import net.corda.testing.ALICE_NAME
+import net.corda.testing.BOB
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNodeArgs
 import net.corda.testing.node.MockNodeParameters
+import net.corda.testing.singleIdentity
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -30,7 +32,7 @@ class AttachmentTests {
 
     @Before
     fun setUp() {
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)))
+        mockNet = MockNetwork()
     }
 
     @After

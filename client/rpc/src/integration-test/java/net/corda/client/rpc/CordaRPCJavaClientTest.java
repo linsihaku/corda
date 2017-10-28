@@ -11,7 +11,7 @@ import net.corda.finance.flows.CashPaymentFlow;
 import net.corda.finance.schemas.CashSchemaV1;
 import net.corda.node.internal.Node;
 import net.corda.node.internal.StartedNode;
-import net.corda.node.utilities.NotaryNode;
+import net.corda.testing.node.NotaryParameters;
 import net.corda.nodeapi.User;
 import net.corda.testing.CoreTestUtils;
 import net.corda.testing.node.NodeBasedTest;
@@ -33,7 +33,7 @@ import static net.corda.testing.TestConstants.getDUMMY_NOTARY;
 
 public class CordaRPCJavaClientTest extends NodeBasedTest {
     public CordaRPCJavaClientTest() {
-        super(Arrays.asList("net.corda.finance.contracts", CashSchemaV1.class.getPackage().getName()), Collections.singletonList(new NotaryNode.Single(getDUMMY_NOTARY().getName(), true)));
+        super(Arrays.asList("net.corda.finance.contracts", CashSchemaV1.class.getPackage().getName()), Collections.singletonList(new NotaryParameters.Single(getDUMMY_NOTARY().getName(), true)));
     }
 
     private List<String> perms = Arrays.asList(startFlowPermission(CashPaymentFlow.class), startFlowPermission(CashIssueFlow.class));

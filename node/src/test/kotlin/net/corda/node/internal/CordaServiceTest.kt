@@ -13,9 +13,7 @@ import net.corda.core.utilities.ProgressTracker
 import net.corda.finance.DOLLARS
 import net.corda.finance.flows.CashIssueFlow
 import net.corda.node.internal.cordapp.DummyRPCFlow
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -76,15 +74,12 @@ class TestCordaService2(val appServiceHub: AppServiceHub): SingletonSerializeAsT
 class LegacyCordaService(@Suppress("UNUSED_PARAMETER") simpleServiceHub: ServiceHub) : SingletonSerializeAsToken()
 
 class CordaServiceTest {
-    lateinit var mockNet: MockNetwork
-    lateinit var notaryNode: StartedNode<MockNetwork.MockNode>
-    lateinit var nodeA: StartedNode<MockNetwork.MockNode>
+    private lateinit var mockNet: MockNetwork
+    private lateinit var nodeA: StartedNode<MockNetwork.MockNode>
 
     @Before
     fun start() {
-        mockNet = MockNetwork(threadPerNode = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
-                cordappPackages = listOf("net.corda.node.internal","net.corda.finance")
-        )
+        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.node.internal","net.corda.finance"))
         nodeA = mockNet.createNode()
         mockNet.startNodes()
     }

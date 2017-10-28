@@ -65,7 +65,7 @@ class LargeTransactionsTest {
         val bigFile3 = InputStreamAndHash.createInMemoryTestZip(1024 * 1024 * 3, 2)
         val bigFile4 = InputStreamAndHash.createInMemoryTestZip(1024 * 1024 * 3, 3)
         driver(startNodesInProcess = true, extraCordappPackagesToScan = listOf("net.corda.testing.contracts")) {
-            val (alice, _, _) = aliceBobAndNotary()
+            val (alice, _, _) = aliceAndBob()
             alice.useRPC {
                 val hash1 = it.uploadAttachment(bigFile1.inputStream)
                 val hash2 = it.uploadAttachment(bigFile2.inputStream)

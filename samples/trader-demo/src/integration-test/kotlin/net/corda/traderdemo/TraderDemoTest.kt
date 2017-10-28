@@ -10,7 +10,7 @@ import net.corda.finance.flows.CashPaymentFlow
 import net.corda.finance.schemas.CashSchemaV1
 import net.corda.finance.schemas.CommercialPaperSchemaV1
 import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
-import net.corda.node.utilities.NotaryNode
+import net.corda.testing.node.NotaryParameters
 import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.poll
@@ -25,7 +25,7 @@ import java.util.concurrent.Executors
 class TraderDemoTest : NodeBasedTest(listOf(
         "net.corda.finance.contracts.asset", "net.corda.finance.contracts",
         CashSchemaV1::class.packageName, CommercialPaperSchemaV1::class.packageName),
-        notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false))) {
+        notaries = listOf(NotaryParameters.Single(DUMMY_NOTARY.name, isValidating = false))) {
     @Test
     fun `runs trader demo`() {
         val demoUser = User("demo", "demo", setOf(startFlowPermission<SellerFlow>()))

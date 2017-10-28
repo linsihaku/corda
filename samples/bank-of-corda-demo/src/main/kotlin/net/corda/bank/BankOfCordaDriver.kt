@@ -10,12 +10,10 @@ import net.corda.finance.flows.CashExitFlow
 import net.corda.finance.flows.CashIssueAndPaymentFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
-import net.corda.node.services.transactions.ValidatingNotaryService
 import net.corda.nodeapi.User
 import net.corda.testing.BOC
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.driver.driver
-import net.corda.node.utilities.NotaryNode
 import kotlin.system.exitProcess
 
 /**
@@ -58,9 +56,7 @@ private class BankOfCordaDriver {
         try {
             when (role) {
                 Role.ISSUER -> {
-                    driver(isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)),
-                            extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset")) {
-                        startNotaryNode(providedName = DUMMY_NOTARY.name, validating = true)
+                    driver(isDebug = true, extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset")) {
                         val bankUser = User(
                                 BANK_USERNAME,
                                 "test",

@@ -19,16 +19,12 @@ import net.corda.node.internal.Node
 import net.corda.node.internal.StartedNode
 import net.corda.node.internal.cordapp.CordappLoader
 import net.corda.node.services.config.*
-import net.corda.node.utilities.NotaryNode
 import net.corda.node.utilities.ServiceIdentityGenerator
 import net.corda.node.utilities.testParameters
 import net.corda.nodeapi.User
 import net.corda.nodeapi.config.toConfig
-import net.corda.testing.DUMMY_MAP
-import net.corda.testing.DUMMY_MAP_KEY
-import net.corda.testing.TestDependencyInjectionBase
+import net.corda.testing.*
 import net.corda.testing.driver.addressMustNotBeBoundFuture
-import net.corda.testing.getFreeLocalPorts
 import net.corda.testing.node.MockServices.Companion.MOCK_VERSION_INFO
 import org.apache.logging.log4j.Level
 import org.junit.After
@@ -45,7 +41,10 @@ import kotlin.concurrent.thread
  * purposes. Use the driver if you need to run the nodes in separate processes otherwise this class will suffice.
  */
 // TODO Some of the logic here duplicates what's in the driver
-abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyList(), private val notaries: List<NotaryNode> = emptyList()) : TestDependencyInjectionBase() {
+abstract class NodeBasedTest(
+        private val cordappPackages: List<String> = emptyList(),
+        private val notaries: List<NotarySpec> = listOf(NotarySpec(DUMMY_NOTARY.name))
+) : TestDependencyInjectionBase() {
     companion object {
         private val WHITESPACE = "\\s++".toRegex()
         val logger = loggerFor<NodeBasedTest>()
@@ -58,6 +57,7 @@ abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyLi
     private val nodes = mutableListOf<StartedNode<Node>>()
     private var _networkMapNode: StartedNode<Node>? = null
 
+    // TODO Get rid of this
     val networkMapNode: StartedNode<Node> get() = _networkMapNode ?: startNetworkMapNode()
     private lateinit var notaryIdentities: List<Party>
     private val validatingNotaryIdentities = mutableListOf<Party>()
@@ -66,7 +66,7 @@ abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyLi
     @Before
     fun setup() {
         notaryIdentities = ServiceIdentityGenerator.generateNotaryIdentities(notaries, tempFolder.root.toPath())
-        val validatingNotaries = notaries.filter { it.validating }.map { it.legalNotaryName }
+        val validatingNotaries = notaries.filter { it.validating }.map { it.notaryName }
         validatingNotaryIdentities.addAll(notaryIdentities.filter { it.name in validatingNotaries })
         networkParameters = testParameters(notaryIdentities, validatingNotaryIdentities)
     }
@@ -157,14 +157,14 @@ abstract class NodeBasedTest(private val cordappPackages: List<String> = emptyLi
         return if (waitForConnection) node.internals.nodeReadyFuture.map { node } else doneFuture(node)
     }
 
-    fun startNotaryNode(name: CordaX500Name,
+    private fun startNotaryNode(name: CordaX500Name,
                         rpcUsers: List<User> = emptyList(),
                         validating: Boolean = true): CordaFuture<StartedNode<Node>> {
         if (name !in notaryIdentities.map { it.name }) logger.warn("Starting notary not provided in network parameters")
         return startNode(name, rpcUsers = rpcUsers, configOverrides = mapOf("notary" to mapOf("validating" to validating)))
     }
 
-    fun startNotaryCluster(notaryName: CordaX500Name, clusterSize: Int): CordaFuture<List<StartedNode<Node>>> {
+    private fun startNotaryCluster(notaryName: CordaX500Name, clusterSize: Int): CordaFuture<List<StartedNode<Node>>> {
         if (notaryName !in notaryIdentities.map { it.name }) logger.warn("Starting notary not provided in network parameters")
         fun notaryConfig(nodeAddress: NetworkHostAndPort, clusterAddress: NetworkHostAndPort? = null): Map<String, Any> {
             val clusterAddresses = if (clusterAddress != null) listOf(clusterAddress) else emptyList()

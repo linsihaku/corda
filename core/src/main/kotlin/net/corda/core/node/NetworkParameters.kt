@@ -2,21 +2,38 @@ package net.corda.core.node
 
 import net.corda.core.identity.Party
 import net.corda.core.serialization.CordaSerializable
+import java.time.Duration
 import java.time.Instant
 
 /**
- * TODO
+ * @property minimumPlatformVersion
+ * @property notaries
+ * @property eventHorizon
+ * @property maxMessageSize Maximum P2P message sent over the wire in bytes.
+ * @property maxTransactionSize Maximum permitted transaction size in bytes.
+ * @property modifiedTime
+ * @property epoch Version number of the network parameters. Starting from 1, this will always increment on each new set
+ * of parameters.
  */
 @CordaSerializable
 data class NetworkParameters(
-        // TODO Add networkOperator CertPath?
         val minimumPlatformVersion: Int,
-        val lastChanged: Instant,
-        val eventHorizon: Instant,
-        val maxMessageSize: Int, //In bytes. Now in AbstractNetworkMapService we have defined: MAX_SIZE_REGISTRATION_REQUEST_BYTES = 40000
-        val maxTransactionSize: Int, // In bytes. We don't have it defined yet?
-        val epoch: Int, // Network parameters are versioned by a single incrementing integer value, called an epoch.
-        val notaryIdentities: List<Party>,
-        // TODO I am not entirely convinced to this solution, as we may want in the future have some more information on notaries. Tags would be better.
-        val validatingNotaryIdentities: List<Party> = emptyList()
-)
+        val notaries: List<NotaryInfo>,
+        val eventHorizon: Duration,
+        val maxMessageSize: Int,
+        val maxTransactionSize: Int,
+        val modifiedTime: Instant,
+        val epoch: Int
+) {
+    init {
+        require(minimumPlatformVersion > 0) { "minimumPlatformVersion must be at least 1" }
+        require(notaries.distinctBy { it.identity } == notaries) { "Duplicate notary identities" }
+        require(epoch > 0) { "epoch must be at least 1" }
+    }
+}
+
+/**
+ *
+ */
+@CordaSerializable
+data class NotaryInfo(val identity: Party, val validating: Boolean)

@@ -16,7 +16,6 @@ import net.corda.finance.flows.CashIssueAndPaymentFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.testing.*
 import net.corda.testing.node.MockNetwork
-import net.corda.node.utilities.NotaryNode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -25,13 +24,14 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class IdentitySyncFlowTests {
-    lateinit var mockNet: MockNetwork
+    private lateinit var mockNet: MockNetwork
 
     @Before
     fun before() {
         // We run this in parallel threads to help catch any race conditions that may exist.
-        mockNet = MockNetwork(networkSendManuallyPumped = false, threadPerNode = true,
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+        mockNet = MockNetwork(
+                networkSendManuallyPumped = false,
+                threadPerNode = true,
                 cordappPackages = listOf("net.corda.finance.contracts.asset")
         )
     }
@@ -107,7 +107,7 @@ class IdentitySyncFlowTests {
      * Very lightweight wrapping flow to trigger the counterparty flow that receives the identities.
      */
     @InitiatingFlow
-    class Initiator(val otherSide: Party, val tx: WireTransaction): FlowLogic<Boolean>() {
+    class Initiator(private val otherSide: Party, private val tx: WireTransaction): FlowLogic<Boolean>() {
         @Suspendable
         override fun call(): Boolean {
             val session = initiateFlow(otherSide)
@@ -118,7 +118,7 @@ class IdentitySyncFlowTests {
     }
 
     @InitiatedBy(IdentitySyncFlowTests.Initiator::class)
-    class Receive(val otherSideSession: FlowSession): FlowLogic<Unit>() {
+    class Receive(private val otherSideSession: FlowSession): FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
             subFlow(IdentitySyncFlow.Receive(otherSideSession))

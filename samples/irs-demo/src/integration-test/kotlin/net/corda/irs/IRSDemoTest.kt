@@ -8,9 +8,11 @@ import com.fasterxml.jackson.databind.JsonDeserializer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.module.kotlin.readValue
+import net.corda.client.jackson.JacksonSupport
 import net.corda.client.rpc.CordaRPCClient
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.identity.Party
+import net.corda.core.internal.concurrent.map
 import net.corda.core.messaging.vaultTrackBy
 import net.corda.core.toFuture
 import net.corda.core.utilities.getOrThrow
@@ -24,7 +26,7 @@ import net.corda.nodeapi.User
 import net.corda.test.spring.springDriver
 import net.corda.testing.*
 import net.corda.testing.http.HttpApi
-import net.corda.node.utilities.NotaryNode
+import net.corda.testing.node.NotarySpec
 import org.apache.commons.io.IOUtils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
@@ -38,20 +40,25 @@ class IRSDemoTest : IntegrationTestCategory {
         val log = loggerFor<IRSDemoTest>()
     }
 
-    val rpcUsers = listOf(User("user", "password",
+    private val rpcUsers = listOf(User("user", "password",
             setOf("StartFlow.net.corda.irs.flows.AutoOfferFlow\$Requester",
                     "StartFlow.net.corda.irs.flows.UpdateBusinessDayFlow\$Broadcast",
                     "StartFlow.net.corda.irs.api.NodeInterestRates\$UploadFixesFlow")))
 
-    val currentDate: LocalDate = LocalDate.now()
-    val futureDate: LocalDate = currentDate.plusMonths(6)
-    val maxWaitTime: Duration = 60.seconds
+    private val currentDate: LocalDate = LocalDate.now()
+    private val futureDate: LocalDate = currentDate.plusMonths(6)
+    private val maxWaitTime: Duration = 60.seconds
 
     @Test
     fun `runs IRS demo`() {
-        springDriver(useTestClock = true, isDebug = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)), extraCordappPackagesToScan = listOf("net.corda.irs")) {
+        springDriver(
+                useTestClock = true,
+                notarySpecs = listOf(NotarySpec(DUMMY_NOTARY.name, rpcUsers = rpcUsers)),
+                isDebug = true,
+                extraCordappPackagesToScan = listOf("net.corda.irs")
+        ) {
             val (controller, nodeA, nodeB) = listOf(
-                    startNotaryNode(DUMMY_NOTARY.name, validating = true, rpcUsers = rpcUsers),
+                    notaries[0].nodeHandles.map { it[0] },
                     startNode(providedName = DUMMY_BANK_A.name, rpcUsers = rpcUsers),
                     startNode(providedName = DUMMY_BANK_B.name, rpcUsers = rpcUsers)).map { it.getOrThrow() }
 
@@ -66,7 +73,7 @@ class IRSDemoTest : IntegrationTestCategory {
             log.info("All webservers started")
 
             val (controllerApi, nodeAApi, nodeBApi) = listOf(controller, nodeA, nodeB).zip(listOf(controllerAddr, nodeAAddr, nodeBAddr)).map {
-                val mapper = net.corda.client.jackson.JacksonSupport.createDefaultMapper(it.first.rpc)
+                val mapper = JacksonSupport.createDefaultMapper(it.first.rpc)
                 registerFinanceJSONMappers(mapper)
                 registerIRSModule(mapper)
                 HttpApi.fromHostAndPort(it.second, "api/irs", mapper = mapper)
@@ -91,7 +98,9 @@ class IRSDemoTest : IntegrationTestCategory {
         }
     }
 
-    fun getFloatingLegFixCount(nodeApi: HttpApi) = getTrades(nodeApi)[0].calculation.floatingLegPaymentSchedule.count { it.value.rate.ratioUnit != null }
+    private fun getFloatingLegFixCount(nodeApi: HttpApi): Int {
+        return getTrades(nodeApi)[0].calculation.floatingLegPaymentSchedule.count { it.value.rate.ratioUnit != null }
+    }
 
     private fun getFixingDateObservable(config: NodeConfiguration): Observable<LocalDate?> {
         val client = CordaRPCClient(config.rpcAddress!!)

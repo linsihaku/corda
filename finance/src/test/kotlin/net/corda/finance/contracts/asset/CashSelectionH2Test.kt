@@ -5,13 +5,10 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.finance.DOLLARS
 import net.corda.finance.flows.CashException
 import net.corda.finance.flows.CashPaymentFlow
-import net.corda.testing.DUMMY_NOTARY
 import net.corda.finance.schemas.CashSchemaV1
-import net.corda.testing.chooseIdentity
 import net.corda.testing.getDefaultNotary
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNodeParameters
-import net.corda.node.utilities.NotaryNode
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.Test
 
@@ -20,7 +17,7 @@ class CashSelectionH2Test {
 
     @Test
     fun `check does not hold connection over retries`() {
-        val mockNet = MockNetwork(threadPerNode = true, notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
+        val mockNet = MockNetwork(threadPerNode = true,
                 cordappPackages = listOf("net.corda.finance.contracts.asset", CashSchemaV1::class.packageName))
         try {
             val bankA = mockNet.createNode(MockNodeParameters(configOverrides = { existingConfig ->

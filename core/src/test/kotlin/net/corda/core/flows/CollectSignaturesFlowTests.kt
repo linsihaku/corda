@@ -12,7 +12,6 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.unwrap
 import net.corda.node.internal.StartedNode
-import net.corda.node.utilities.NotaryNode
 import net.corda.testing.*
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.node.MockNetwork
@@ -39,8 +38,7 @@ class CollectSignaturesFlowTests {
 
     @Before
     fun setup() {
-        mockNet = MockNetwork(notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, true)),
-                cordappPackages = cordappPackages)
+        mockNet = MockNetwork(cordappPackages = cordappPackages)
         aliceNode = mockNet.createPartyNode(ALICE.name)
         bobNode = mockNet.createPartyNode(BOB.name)
         charlieNode = mockNet.createPartyNode(CHARLIE.name)

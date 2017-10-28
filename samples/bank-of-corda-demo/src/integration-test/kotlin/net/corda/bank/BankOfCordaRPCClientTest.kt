@@ -11,15 +11,12 @@ import net.corda.node.services.FlowPermissions.Companion.startFlowPermission
 import net.corda.nodeapi.User
 import net.corda.testing.*
 import net.corda.testing.driver.driver
-import net.corda.node.utilities.NotaryNode
 import org.junit.Test
 
 class BankOfCordaRPCClientTest {
     @Test
     fun `issuer flow via RPC`() {
-        driver(extraCordappPackagesToScan = listOf("net.corda.finance"),
-                notaries = listOf(NotaryNode.Single(DUMMY_NOTARY.name, validating = false)), isDebug = true) {
-            startNotaryNode(DUMMY_NOTARY.name, validating = false)
+        driver(extraCordappPackagesToScan = listOf("net.corda.finance"), isDebug = true) {
             val bocManager = User("bocManager", "password1", permissions = setOf(
                     startFlowPermission<CashIssueAndPaymentFlow>()))
             val bigCorpCFO = User("bigCorpCFO", "password2", permissions = emptySet())
